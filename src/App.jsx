@@ -63,6 +63,55 @@ async function sbLoadCreativeImages() {
   } catch(e) { return {}; }
 }
 
+const LOGO_SRC = "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCADIAyADASIAAhEBAxEB/8QAHQABAAIDAQEBAQAAAAAAAAAAAAgJBQYHBAMCAf/EAFkQAAEDAwIDAwUHDQ0GBgIDAAEAAgMEBQYHEQgSIRMxQSJRYXGyFDI2N3SBkQkVFhgjQlJicnWCobQzOFVWdpKUlaKxs8TTJENTg8HSFyZzk8LRJzSj4fD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AmWiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiL4XCto7dRS1twq4KSlhbzSzTyBjGDzlx6AIPuij5qXxWYLjj30eMQTZRWtOxfC7saVp/9Qgl36LSD513DErzFkWKWjIIIXwQ3OhhrI43kFzGyxteGnbpuA7ZBk0REBFjcjv8AZMbtj7nf7rR2yjZ3zVMwjbv5hv3n0DqVwXIuLTDoMnobRjdnrr3Ty1TIZ61zvc7A1zti6NrhzPPX74MQSMREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEXnuNdRW2ilrrjWU9HSwt5pJ55BHGwecuPQBcH1D4rdP8dqfcdggqsnqGvAkfTHsqdo367SOHlHbu5WkHzoJAIvjQ1DKuigq4w5rJo2yNDu8Bw3G/0r7ICItcznOsRwig92ZTfqK2MI3YyR+8sn5EY3c75gUGxouKaYcROO6hamjD7HZLgymfTySxV9Q9redzBuR2Y3IaRvsd9+7oF2tAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREEf+JzXu8aZXWLH7JjQmq6inEzLjWc3ucbkjlY0bc7ht18obdOhUNM+1BzLO633TlN/q7hs7mjhc7lhj/Jjbs1vrA386stz/E7Nm+KVuOX2ljnpaqMtDi0F0L9vJkYfBzT1B/6KrO7UU1sutXbqkATUs74JAPwmuLT+sIPMrRtFvicwn+T1B+zxqrlWjaLfE5hP8nqD9njQbaopcRHErlOLZRcsPxnH22uopHmM3GvYXvkHg+KMgN5T4OdzA+ZStXLeKDBbZmukl5fUUkbrlaqSWuoKgNHaRvjbzlgPmeGlpHd1B7wCAr1yvJ8hyu5uuWSXmtulUd9pKmUu5R5mjuaPQAAvhjXwjtnyuL2wseshjXwjtnyuL2wgtjREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAWt6mT5fTYTcJsEo6GsyBrR7lhqztG7yhzeIHNy77bkDfbdbIiCr3VPLdQMiyGpps+udylrqSUsfR1P3NlO8d4bENmt+YdfStOUmPqglipqLUCxX+CJsclzoHxTkD374XABx9PLI0epoUZ0FsmN/B22/JIvYC968GN/B22/JIvYC96DgfFxkesGN2dtbgkMcOPMpua419NGH1cD+Z2/Q78sfLynnaNwd9yOigldLjX3Wvlr7pXVNdVzHmknqJXSSPPnLnEkq2aohiqIJIJ42SxSNLHseN2uaRsQR4ghVV6g2dmP55kFhiBEduudRSs3P3scrmj9QCDqnBB8f1B8hqfYVgar84IPj+oPkNT7CsDQEREBERAREQEREBERAREQEREBEXgvd6s9jpPdd6u1BbKf8A4tXUMhZ9LiAg96Ln82tek8UvZOz6xl2+27KgOH0jcLbccyGw5JRGtx+9W+60wOxlo6hkrWnzEtJ2PoKDJoiICIiAiIgIiICIiAqtdYGNj1azGNo2a2/VzR6hO9WlKrfWT438z/P9d+0PQaorRtFvicwn+T1B+zxqrlWjaLfE5hP8nqD9njQbasXl7GyYneI3DdrqCdp9RjcsosblXwXuvyKb2CgqeWQxr4R2z5XF7YWPWQxr4R2z5XF7YQWxoiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiIIjfVGGjlwV/jvcB+zKIql59UX/c8G9df/llENBbJjfwdtvySL2AvevBjfwdtvySL2AvegKsfiEaGa4ZmB3fXioP0vJVnCrI4h/jyzP87z+0UG6cEHx/UHyGp9hWBqvzgg+P6g+Q1PsKwNAREQEREBERAREQERfmaWOGF800jI42NLnvedmtA7ySe4IP0i5FedfMWffTjuEW655zeuv3G0Rgws27y+Z3khv4w5h6V5bxk/EU+A1No0yxinBG4pqm8CeUeglrmN3+dB2dfyR7I43SSPaxjQS5zjsAB3klRCyDif1Sw67/AFszPTm3UNSBuI3dtDzt87XFzg4ekbhYXO+JCn1MobViVdFU4ZZK2o2yCshlNS91OP8Adx8rA4B3UHofAdRuCGya98VDqaoqMe0zMb3MJjmvUjA9u46HsGnofy3bg+APRyiffr1d7/cZLle7nWXKskPlTVMzpHn0bk93oVk+N45pTlmAUNsstrx6943TxdlTNZGyZsXn6nymv3O5J2duST1XOMv4StOLrI6ax1d1sEh7o4pRPCP0ZN3f20EEFILgQtt7qtY5LhQSTR2yioZDcS0kMkDxyxsd5zzeUPyCt3peDAivHurUEOowevZ2rlkcPN1lIHr6+pSR0wwHG9OsZjsON0hih5ueaaQh01RJ4ve7Ybn6AO4AINpREQEXjvV1tlltstyvFwpbfRQjeSeplbHG31uJ2XBs64s9PrJK+mx+juGSTsO3aRD3PTk/lvHMfWGEelBIVFC258ZWUSPJtuG2emZ4CoqJJiPnbyL40PGRmTJAa7E7BOzxELpoz9Jc7+5BNhFG/BuLvCrtUR0uTWa4Y89527drhVQN/KLQHj5mFSEst1tt7tkF0s9fTV9DO3miqKeQPY8egjog9iIiAqt9ZPjfzP8AP9d+0PVpCq31k+N/M/z/AF37Q9BqitG0W+JzCf5PUH7PGquVaNot8TmE/wAnqD9njQbasblXwXuvyKb2CsksblXwXuvyKb2CgqeWQxr4R2z5XF7YWPWQxr4R2z5XF7YQWxoiICIiAi+dTPDTU8lRUTRwwxtLnySODWtA7ySegC5ZeNd8T+uctow+gvOcXOI7PisdKZooz53THZgb+MC4IOrouEXfUDiGmY+osuilHTQbbsFZd4pZPna17D82y5jf+J/VvFLkKLLdPLZbpe8RzU9RAXjztc55BHpG4QTFRRhw7jDxitkZDlOM3C0OPQz0koqYx6SCGuA9QcpA4VmGMZpavrni96pLpSggPdC7yoyfB7Ts5h9DgCgzqIiAiLw3y8WqxW2S5Xq5Uluo4vfz1MzY2N+dx239CD3Io1ancW2K2ftaLCbdLkFWNwKqbeGlafONxzv9WzR5iuxaIZhV59pZZMtr6SGkqq+OTtooSSwOZK+Mlu/UA8m+x32323Peg3NEcQ0EkgAdST4LimpnEvpzh1RJQUdRNkdxjJa6K3FpiY7zOlJ5f5vMR4oO1ooYXfjKySSZxtOGWmlj+9FVUyTu+ct5F+LPxk5RHUsN4w+z1MG/ltpZpIXbeguLx+pBNJFy1mslFctGHak4vj1yvkcT+Se2x+TPC4OAk5tg7o0Hm3A9716Lkf251s/iDWf1k3/TQSuRRR+3Otn8Qaz+sm/6a/cPGVQTSsii09rpJHuDWMbcWkuJ6AAdn1KCVaLE4ddau+YvbrvX2ips1TVwiWShqP3SAn713QdfmCyyAiIgItN1fzO4YJiYv1vxSvyXknDJ6ejcQ6GLkc4ynZrvJBaAen3264H9udbP4g1n9ZN/00ErkUW6Hi7dcIqma26XXWsipI+2qnw1vOIIx3vcWxHlHpOw9K8v251s/iDWf1k3/TQSuRRR+3Otn8Qaz+sm/wCmu8aOZvcs+xg36vxKuxuJ7x7lZVycxqIy0ESN8lp5Tv06de8IN2REQERalq7nNDpzgVdldfTuqmUxYyOma8MdM97g0NBIO3eT3dwKDbUXD9DOIm06n5hJjLcfns9R7lfUQvkqxKJS0jdgAaNjsS71NK7ggIiICLV9Tsmu2JYu+82fFa7J5o5Q2Sjo38sgZsSXjoSdtgNgN+qj0/jMtzHFrtP61rgdiDcmgg/+2glai5BoXrRX6p3GUU+A3K12mKNxN0lqBJCZAR9zB5Bu7qT0J226966+gIi/MsjIonSyvayNjS5znHYNA7yT4BB+kXFdQeJnTHFJZKWkr58irWEtMdsaHxtPplcQwj8kuXH73xl3uSY/WTCbfTRDuNZVvmcfT5IZt6uqCZSKEdPxjZy2TeoxfHJGb9zBMw/SXn+5bxiHGNYKqaOHKcUrraCQHVFFOKhg9JaQ0germKCUiLCYXluN5lZ23fGLxS3Ojd0L4XeUw/gvafKY70OAKzaAiIgiR9UX/c8G9df/AJZRDUvPqi/7ng3rr/8ALKIaC2TG/g7bfkkXsBe9eDG/g7bfkkXsBe9AVZHEP8eWZ/nef2irN1WRxD/Hlmf53n9ooN04IPj+oPkNT7CsDVfnBB8f1B8hqfYVgaAiIgIiICIiAiIgx+R3q147Yqy+Xqsjo7fRxGWeaQ9GtH95PcAOpJAHVQB1+1yyPVG7PtNsdUW/GhKGU1BGdn1J38l823viTtszuHTvPU7zx26kTXPKIdO7bOW0FsDZ7hynpLUObu1p84Y0g+tx396FxbQe3x3TWfD6KZodG68U73tPc4NeHEfPy7IJ/aCab27TTAKO0wU8X10mjbLdKkDd005HUb/gt3LWjzDfvJ36AiINX1MwTHNQsZmsOR0TZonAmCZoAlppNuj43eBH0HuO4VbmqmEXbT3N6/F7uOaSndzQzhuzaiE+8kb6CPDwII8FaWo68dWCR33TqHMKSEG4WF47ZzR1fSyEBwPn5XFrh5hz+dBDrT3OMnwK/R3nGLnLRzgjtY994p2g+8kZ3Ob+sd4IPVWH6E6n2nVPDW3iiYKWvpyIrjRF25gl233HnY7qWn1jvBVZi7DwgZlNietVqpnTFtBe3C21LN+hc8/cj6xJyjfzOd50FiSIiAuZax6uUGEVFPj1nt82RZhcBtQ2il8pw37nyke9b4+c7eA3I2nUyvyi24ZXVGGWdl2vpDY6SB8jWMa5zg3tHcxG4bvzEeOy1/RzTCjwinqLvdKk3nL7p90u13m8p8jz1LI9/exjuAG2+w37gAHLafQXNdSrjHkGteX1DTvzQ2S2OAjpgfveY7safA8ocT4vJXSLHoDpFaKcRQ4VQVJA6yVjn1DnHz+W4gfNsF05EHNrroPpFcoHRT4LbIg776m54HD1Fjgo+64cKU1ot9TftOqqpr4YWmSW1VBDpg0dT2TwBz7fgkb9OhceimWiCowgg7EbELqHD3q7eNLspif2s1Tj1VIBcaHfcFvd2jB4SN7/AEgbHwI2TjVwWnxHVf66W6BsNvv8JrAxo2aycHaYD1ktf63lcLQW12ytpLlbqa40E7KikqomzQSsO7ZGOALXD0EEFehcF4Gsplv2jf1pqpS+ex1j6Vu53PYuAkZ9Bc9o9DQu9ICq31k+N/M/z/XftD1aQqt9ZPjfzP8AP9d+0PQaorRtFvicwn+T1B+zxqrlWjaLfE5hP8nqD9njQbasblXwXuvyKb2CsksblXwXuvyKb2CgqeWQxr4R2z5XF7YWPWQxr4R2z5XF7YQWxoiIC1HVbUPG9NsZfe8iquXm3bS0sfWapk294wf3k9B4rM5fkFrxXGbhkV5n7CgoITNM7xIHc0DxcTsAPEkBVqawahXvUzNai/3RzmxkmOhpGu3ZTQ7+SxvnPiT4kn0AB3HE6nO+KLNpmXyrms2CW2QPqKSjeQwnvbHv/vJTtuXHo0bkAbgGXOJ43YsUskNlx2101toIR5MULdtz4uce9zj4uJJPiVreg+Ew6f6W2bHhE1lYIRPXuA6vqHgF+/n2OzR6Ghb0gLE5bjViyyyTWXIrXTXKgmHlRTN32P4TT3tcPBwIIWWRBXPxJ6N1uleRMlpHy1mOV7j7hqnjd0bu8wyEdOYDqD98OvgQNAwnLMhwu/Q3zGrnPb62L75h8mRvi17T0c0+Y7hWV6u4XRZ/p7dsXrGs5qmEmmlcP3GdvWN/zO2384JHiqvq2mnoqyejqonRVEEjopY3d7XNOxB9RCCxrh21htuq2NPe+OOiv9CALhRNPTr3Sx79Sw/S09D4E9TVXOkObV+n2oFryehc8tp5Q2qiaf3eBx2kjPrHd5iAfBWgUNVT11DBW0krZqeojbLFI3uexw3BHrBCDjfFRqPn2nthpanD8fZU00zH+67rJE6VtEdwG7tHQE7++duPDZQSzHL8nzG5G4ZPfK261HXlM8m7Wb+DGjyWD0NACtTqYIamnlpqmKOaGVhZJG9oc17SNiCD3gjwVX2s+OQYjqrkmO0jSylo6+RtO0nctid5TBv47Nc0INRVh3Czc7fZuF7HrrdauKjoaSCrlnnlds1jRVTEkqvFSp0Ljn1VxLDNL2Pkbi9ghluWTFhI90yOqpXQUpI8CNnH0b9xaEGQ1kumtOsmNSXDBsfraTBXvcyGFkzIqq4sHTtXtJDjGfBg7/Hm6ERXv9hvmP1nuO+2e4Wuo/4VXTvicfUHAbq1+nhhp6eOnp4mRQxNDI42NDWsaBsAAO4AeC+Nyt9Bc6R1JcqGmrad3voqiJsjD6w4EIKlV97dRVdxr4KCgppaqrqJBHDDEwufI4nYNAHUklWQ3zQXSG8yGSrwa2xOPX/Y3SUo+iJzQsvgelen2DVHunF8XoqGq5S33S4ummAPeBJIXOAPmBAQeDh1wSbTvSi14/W8v1xdzVVdyncCaQ7lu47+Ucrd/Hl3XAONPRekt0EmpGK0bYIXSAXmlibs1pcdhUNA7tyQHAeJB/CKmEvLeLdRXi01dquMDKijrIXwTxO7nscCHD6CgqWW16O3qjx3VTGL3cA33HR3OCScu7mM5wHO/RB3+ZfjVbEKvBNQbxitXzO9w1BbDI4fusJ8qN/ztLT6DuPBaugtzBBAIIIPcQi5Bwk54M40hoWVM3PdLNtb6zc+U4NA7N5/KZt18XNcuvoCIiAq97xprJn3FHkmI4zG2loG3Wd9VMxn3Okia/7qdh06OJa1vnIHQd0785yGkxPDrtktcR2FupJKhzSductHksHpcdmj0lcx4SMNmsen8mW3hnNkGWTG51kjm7OEbyXRt+cOL/W/bwQdEwTCMawrFosbsFsigoWt2lDmhz6hxGznyH79x8d/UNhsFXxxKYEzTzVm5WekiMdsqdq23jzQyE+SPyXB7PU0KypRg+qB4r7tw6x5fBFvLbap1JUOA69lKN2k+gPYB/zEEMKR0TKqJ8zOeJr2l7fO3fqFbVSvhkpopKctMLmAxlvdykdNvRsqkFZZwz5K3KtEMZuBk556ekFFUbnqJIfue59JDWu/SQdHREQFEH6oPlvNUY/g9PL0YHXKraD4neOIfR2p+cKXxIA3J2AUE9WsaqdRsOzvWuMySMhv0dPbxudnW+EdiXgekujJ83I/zkoOQaT5TJhWo9hyeMuDaCsY+YN73QnyZG/Oxzh86tIgljnhjnhkbJFI0PY9p3DgRuCD5lUerF+EbLvst0QtBml56y072yo3PX7kB2Z+eMx9fPug64iIgKC+t2m8WScYBxO0RinivMkFVVGNuwhaY+aeQenZrnde9zvSp0Lg+jNFHkvEdqbnr2h0VvnZYqJ3eA6NrWzEfPG3+eUHases9tsFko7LaKSOkoKOJsMELB0a0f3nxJ7ySSV7kRBrWpGcY9p/jM1/yOr7GnaeSKJg5paiQ90cbfvnH6B3kgAlcVlw7UzXZ7a/N66qwnCnkOprHTH/AGupZ4OmJGwJ7/KB226MHvjuWE4DesjziXUXVCmj+uFNM+Ow2XtBLBa4Q7YSHbyXyu2Dubw6Hv2DOuoOcYlobpVjMLG0WG22qlaBvPcI/dUhPn3k3AP5IC284tjBh7A45ZzF+AaKPl+jZZhEHMM40E0syymeyoxaktdQ4HlqrWwUsjT59mjkcfymlQs1/wBGr5pTeY+2kNwsVW8iiuDWcu57+zkH3rwOvmIG47iBZEtW1Xw6hz3ALti9cxn+1wHsJHD9xmHWOQep23rG48UFb+l+e5Dp3lMF/wAeq3RvaQKincT2VTHv1jePEenvB6jYqyfTfL7XneFW3KbQ4imrYuYxuO7oXg7Pjd6WuBHp7+4qrOrp5qSqmpaiN0c0L3RyMPe1wOxB+cKWX1PXKJTNkmGTSl0YYy5UzN/encRy/TvF9CCXiIiCJH1Rf9zwb11/+WUQ1Lz6ov8AueDeuv8A8sohoLZMb+Dtt+SRewF714Mb+Dtt+SRewF70BVkcQ/x5Zn+d5/aKs3VZHEP8eWZ/nef2ig3Tgg+P6g+Q1PsKwNV+cEHx/UHyGp9hWBoCIiAiIgIiICIhG4IPigqkza8y5FmN5v07i6S4V01SSfx3lwHqAOy2HQCqZR624ZPIQGm808ZJ8Od4b/8AJadc6SWguVTQzgiWmmfE8Hwc0kH+5fq0V01sutHcqY7T0k7J4z5nMcHD9YQW0ovHYrlTXmyUF3onc9NXU0dTC7zse0OafoIXsQFjsntFNf8AG7nY6wA09wpJaWTcb+S9haf71kUQVJ19LNQ11RRVLeSanldFI3zOaSCPpC9mJVElHlVoq4d+1groZGbd+7ZAR/cs/rjSMotZcypowAxt7qy0DwBlcQP1r6aE45NlWr+MWaKMvY+4Ryz+iGM9pIf5rT8+yCz1ERAREQEX4nmip4XzzysiiYC573uDWtHnJPcFy/K9ftNLHWC3Ul3lyK5udyx0VkhNXI93mDm+Rv6ObdB1NFxoZjrflIAxbTi34vSP97W5LWEv28/YR+W0+g7hf3/wizDI/L1D1Yv1fE7q632VrbfTbfgu5dy8evYoOafVCKiz1VixqOK40Ulzo62VrqZs7TMyN7AS4s35gN2N67eZQ7Ur+MfTbBsB0ysn2LWCnoKma7BktQXOkmkb2MhIL3ku232O2+2+yiggll9TsrHNuOZW8uPLJDSTAeYtMoPtD6FMFQv+p4/DLKfzfF/iKaCAqt9ZPjfzP8/137Q9WkKrfWT438z/AD/XftD0GqK0bRb4nMJ/k9Qfs8aq5Vo2i3xOYT/J6g/Z40G2rG5V8F7r8im9grJLG5V8F7r8im9goKnlkMa+Eds+Vxe2Fj1kMa+Eds+Vxe2EFsaIiCIfH9ncnb2rTyhmIjDRcLiGn3xJIiYfVs5xHpYfBRo03loqfUCwVNypqqqooLjBNUQU0XaSyRseHOa1viSAQs1xAX5+S6z5XdXPL2G4yQQnf/dxHsmf2WBZjhOax3ELiQk7vdEpHrEEhH69kEuftj8R/irnX9Sn/uT7Y/Ef4q51/Up/7l2hEHF/tj8R/irnX9Sn/uT7Y/Ef4q51/Up/7l2hEHF/tj8R/irnX9Sn/uUOtZqGpyPVC/3/ABrGr+y2XGqNTG2e3PY8OeA6TcDcDyy/x7lZaiCqP7F8m/i7d/6FJ/8ASsW4Z6muqdCcTNyhngqYaM0zo5mFr2iKR0bdweo8lg+ZdGRAVcnF60N4i8rDRsOemP00sJVjarl4v/3xmV/l0v7LCg5Mp88C+Pw2rRKO7iMe6L1WzTvft1LI3GJrfUCxx/SKgMrGuD/97nin5NV+1TIOsoiICIiAiIgihx/4N29utOoNFDu+mIt9wLR/u3EuiefU4ubv+O3zKHatXz/GqLMMLu2MXAD3PcaV8Jdtv2biN2vHpa4Bw9IVWt/tVbY75XWa4xGKsoah9POz8F7HFpH0hB2Hgxzr7EdXYLXVTcltyBooZgT5LZt94XevmJZ/zCrBVUfDJJDMyaF7o5GODmPadi0jqCD51ZzoZm0eoGl9myTmaauSHsq1o+9qGeTJ08ASOYDzOCDd0RfOqnhpaaWpqJWxQwsMkj3HYNaBuST5gEHE+ImSTNM0xHRyje7srnUC53wsO3JQwncNPm53A7fjNb5126KOOGJkUTGsjY0Na1o2DQO4AeZcT4bIJssv+V6xXCNwdf6s0doa8bGKghPK3bzczmjf0x7+K7cgLUNaMZ+zHSrI8dbH2k1VQvNO3bvmZ5cX9trVt6IKjD0OxUwPqemTc9FkuHzSdY3x3Kmbv4OAjl+jaL6VHziExn7EdZcmszI+zpxWOqKYAdBFLtIwD1B/L8yzPCbk32Ma62CWSTkprjIbdP123Ew5Wf8A8nZn5kFjqIiDnHEplMmJ6OXyspXO+uFbGLdQtb75003kDl9IaXOH5K92G6fUFr0Uo9OqyNpgdaXUdZyj30kjT2rh63ucQtJ1P/8AOvEZhODs+6W/Ho35Fc2jqOdp5YGn0h23TzSLt6CpvIrTV2G/3CyV7OSroKmSmmb5nscWn9YUh+APLvrbn10xCol2gvNL21O0n/fw7nYeuMvJ/ICw/HNiX1h1ebfoIuWkv9M2fcDYdvHsyQD5hG4+l649p/kdRiOb2bJqXmMlurI5y0H37QfKZ+k3cfOgtWRfC31dPcKCnr6OVstNUxNmhkb3PY4AtI9YIX3QYXOr9Di+F3nI6jYx22ilqeU/fFrSQ35zsPnWjcKthmsmitnnrd3V95L7tVvd3vfOeZrj6ez7NYvi0qZ7hiNiwChkLavLr1T0B5e9sDXh8j/UCGb+gldioqaCjo4aSmjEcEEbY42Dua1o2A+gIPqiIgIiICLTM61T0+wnnZkmU2+kqG99Kx5ln/8AbZu4esgBaXHrJlWTtH/hvpTfrrA/3lwuz2W+lI/CaXbl49RBQdnXmudwt9rpHVlzrqWipme+mqJWxsb63OIC5IMX13yfrkOf2bEqV/vqXH6EzS7eYyy9Wn0tJXqtnD7gLattwyU3nMLg3r7pvtwkqDv4+SCG7eggoIL62utcmruVz2aspqy3z3SeeCankD43te8v8kjoRu4jp5l0Pgbq3U+vVLC07Cqt9TE70gND/wC9gWmcR1Db7ZrdlFvtVHTUVFT1YZDBTxCOOMCNvRrR0A337ls/BV++Fsvyeq/wHoLC0REESPqi/wC54N66/wDyyiGpefVF/wBzwb11/wDllENBbJjfwdtvySL2AvevBjfwdtvySL2AvegKsjiH+PLM/wA7z+0VZuqyOIf48sz/ADvP7RQbpwQfH9QfIan2FYGq/OCD4/qD5DU+wrA0BERAREQEREBERBXnxg4HUYdq9XXGKEi1397q+lkA8ntHHeZnrDyTt5ntXGFaNqxp/YdSMRnx6/RODSe0pqmMDtKaUDo9v0kEdxBIVfWr+kOY6Z3OSO80D6i2F21PdKdhdTyjw3P3jvxXdfNuOqCWHA9nsWR6ZnFaucG54+7s2tcfKfTOJMbh+SeZnoAb51IJVZ6X5vedPczo8nskg7aA8ssLj5FREffRu9B/UQCOoCsT0l1VxDUqzx1dhuEbK0MBqbdM4NqID47t++b5nDcH17gBvKIuJ8S+rFPjdiqMLxV8lzzS7xmmp6SiaZZaYPGxkcG7kO2J5W9++x22CCDuq12ivupuT3mBwfBWXapmiI8WOlcW/q2UuuCXSeoxiyS55f6Yw3O6wiOhheNnQ0pIdzEeDnkA+hoH4RCwnDpwwmgqabKdSoI3zxkSUtm3D2sI6h05HRx/EHTzk9WqV6AiIg/MsjIonSyvayNjS5znHYNA7yT4BRr1m4rLFYJJ7RgVPFfbgwljq+Un3HGfxdusvzEN8xK0HjO1nrrnfazTjHKt0FqondldZonbGqmHvotx943uI8XA79AN+DaV4tJmuoljxZj3MbcKtscr297Ih5Ujh6QwOPzIO4abYRqfxEVov+d5NcafFGS9NjyNmcD1bBENmDbuMhB2P4RBAlpp9p5h2BUApMXsVLQnl5ZKjl5p5fy5D5R9W+w8AFnrPbaGz2mktVspo6WipIWwwQxjZrGNGwA+ZetAREQRI+qI3dnZYjYWPBeXVNXK3zDyGMPz+X9CiGu6cW1xky/PcgyaGQutlkr6fH6V3e17hHNJLt6ntd8zguFoJR/U8fhllP5vi/xFNBQv+p4/DLKfzfF/iKaCAqt9ZPjfzP8AP9d+0PVpCq31k+N/M/z/AF37Q9BqitG0W+JzCf5PUH7PGquVaNot8TmE/wAnqD9njQbasblXwXuvyKb2CsksblXwXuvyKb2CgqeWQxr4R2z5XF7YWPWQxr4R2z5XF7YQWxoiIKlbrJJNc6qWY7yPme5/rLjutt0GuzLJrNiNxldyRsusMcjvwWPdyOPzBxWDzu3vtWb361yjZ9HcqiBw9LJHN/6LDMc5j2vY4tc07gg7EHzoLckWnaLZlBnumdlyWORrp56cMrGt+8qGeTI3bw8oEj0EHxW4oCIiAiIgIiICrl4v/wB8Zlf5dL+ywqxpVy8X/wC+Myv8ul/ZYUHJlY1wf/vc8U/Jqv2qZVyqxrg//e54p+TVftUyDrKIiAiIgIiICg9x5YN9Zs9o8zo4eWjvkfZ1JaOjamMAbnzczOU+ktcVOFc+4h8HGoGk94sUUQfXsj91W/p1FRHuWgflDmZ6nlBWapOcA+dfWzLrhglbNtTXdhqaME9BURt8oD8qMb/8sKMjgWuLXAgg7EHwWQxi812O5Fbr9bJOzrLfUsqIXeHMxwIB84O2xHiCgtiXIOKa91zcOoMDsUm18zKsba4Nu9kBI7eQ/ihpDT6Hk+C6PhWQ0OV4la8ktrt6W40zKhg33LeYdWn0tO4PpBXJtO//AMicQ2R54/7rZsUYbFZj3tdP31ErfSNy3fxa9vmQdfxWyUON41bbBbY+Sjt9MynhHiWtaBufSe8nzkrJIiAiIghr9UJxjsMgx3L4Y/Jq6d9BUOA6B8Z52E+kh7x6mKLdHUTUlXDV00jo54ZGyRvHe1zTuCPnCsQ4v8Y+yXQm9GOPnqbUWXKHp3dlv2h/9t0irqQWtYLfocowyzZFT7CO5UUVTyj70vaCW/Mdx8yy8j2Rxukkc1jGAuc5x2AA7yVwLgUyb686OPsksnNPY62SAAnc9lJ90Yf5zpB+itv4osknx7R66Q2/mddL05looGNPlPknPKQPTyc5HpAQYLhiY/Jblmmq1S1xdkl1dBby4dRRU/kR7evuPpYu2rAadY3T4hgtlxmm5Sy3UccDnN7nvA8t/wCk4uPzrPoOE8buJfZFo1Ld4IuessNQ2raQOphd5Eo9Wxa8/kKAStovVupbxZq2010faUlbTyU87PwmPaWuH0EqqzMLHVYzld1x6uH+0W6rkppDttzFjiOYeg7bj0FBPPgwy77JtE6Ginl56yxyOt8gJ69m3Z0R9XI4N/QK7WoKcB+XfWXVOqxqol5aa/UpawE9O3i3ez+x2o9ZCnRUTRU9PJUTyNjiiYXve49GtA3JPzIOKz/+b+LyGP39Dg9kLz4htZVdP8NwPrYu2rivCdDLdrBk2otXG5tRlt7nqouYdRTRuLIm/ontB6tl2pARFxris1ak0zwuKns72fZFdi6OiLgHCnYNueYjxI3AaD03O/UAhB79bNdsO0xa6hqHuu1+Ld2W2meOZm43Blf1EYPzu67gEdVw7FrrrfxF3GZ0N5diWHxyGOeWiDo2HzxtIIfM/bbcFwaPHbcAx80/sNw1D1Ltdilq55aq8VwFTUyOL5OUkulkJPeQ0Od179lZzjVktmOWGisdmpI6S30UQigiYOjWjz+ck7kk9SSSUGjaY6H6e4FGya32ZlwuY6uuNwAmnLvO3ccrP0QPTuulIiAiLTtasrZhWl1+yLtA2ogpXMpB4uqH+REAPHy3A+oFBXTrJdmXzVjK7rE7niqLtUuidv3xiQhn9kBb5wVfvhbL8nqv8B65tqFj0uK5bV4/UBwqaNkLagE90piY6QfM5zl0ngq/fC2X5PVf4D0FhaIiCJH1Rf8Ac8G9df8A5ZRDUvPqi/7ng3rr/wDLKIaC2TG/g7bfkkXsBe9eDG/g7bfkkXsBe9AVZHEP8eWZ/nef2irN1WRxD/Hlmf53n9ooN04IPj+oPkNT7CsDVfnBB8f1B8hqfYVgaAiIgIiICIiAiIg1vUfNsfwDFqjIsjq+wpYvJjY3rJPIe6NjfFx2PoABJ2AJUbNOr/feJrPrhTZHVS2vB7Oxk77LRylvuoucezbM8bF/vSSegGw2AJ3WhcdOU1121ifjb5XChsVNEyOLfyTJLG2V7/WQ5jf0VzjRnU2/6XZQ69WRsM8c8fZVdJPv2c8e++246tcD1Dh3ekEghNjLeGnSXIHGRljms0xGxfbKgxD+Y7mZ/ZWhzcHlhgrG1Nnzq90L4zzRvdAx72nzhzSxZHGeL7Aa6Fjb7Zr3aKgjy+RjKiIH0OBDj/MC2+k4ltGKgDmy50Dj97LbqkbfOIyP1oPFZtBa9kQgv+sOod2ph09zx3V8Ebh5nDdxI9AIXRMF09wzCInNxmwUlDK8bS1OxkqJfPzSu3e7r12J2WvUuvGkNTt2ed2tu/8AxOeP2mhZal1X0xqduy1Bxfc9wfdIWH6HOCDc0WFoMuxSvIFDk9lqie7sa+J+/wBDlmWOa9oexwc09QQdwUH9XgyOv+tWPXK6Bod7jpJajlPjyMLtv1L3rw5BQC62G4WwuDRWUssG58Odhb/1QVQVtTPW1k9ZVSulqJ5HSyyO73ucdyT6SSun8I9XDRcRGKTVDg1jpZ4QT+FJTysb/acAuX1lNPR1k1JUxuingkdHKx3e1zTsQfUQvraa+rtV1pLpb5nQVlHOyeCVvex7HBzSPUQEFtKLl+hOs2Nam2Knayrp6LIWRgVlte/lfzDvdHv79h7+m5G+x2XUEBc14jtSINNdNqy5RzMF4rGmmtcXQkzEe/2/BYPKPh3DxCyWquqmG6b2uSpyC6Re7OTeC3wuD6mc+GzPAfjO2HpUY9KoMg4jNcxmOU0/JjVic2RtIOsLNjvFTjf3xcRzPO3UAjoC0APBrThkuFcJ+G0laxzbpcL19cbhz++7WWCQgO38WsDGn0gqN6m99UH+K+w/npv+BKoQoJR/U8fhllP5vi/xFNBQo+p6TtbqBklMT5Ulqa8D0NlaD7QU10BVb6yfG9mf5/rv2h6tIVWGqdQ2r1OyqqYd2zXqskafODM8/wDVBratG0W+JzCf5PUH7PGquVZ/oTO2o0VwqRh3AsVGz52wtaf1hBuixuVfBe6/IpvYKySwueVDaTB79VPOzYbbUSE+YCJxQVTLIY18I7Z8ri9sLHr1WiZtNdqOoedmxTseT6A4FBbSiIgr540sTlxvWyuuLI+Wivsba6FwHTn25ZW7+fnaXep4XElY9xO6YjU3TqSlomN+vltJqba47Dndt5URJ7g8AD8oNJ6BVzVdPPSVUtLVQyQTwvMcsUjS1zHA7FpB6gg9NkHbeEvWJmnGSy2W+zOGNXWRvbP6kUk3cJtvwSNg7brsAfvdjP6nmhqaeOop5Y5oZWB8ckbg5r2kbggjoQR4qo9dj0N4gss01jjtMzRe8eDv/wBGeQtfBv39k/ry+flILe/oCSUFiCLkmE8RelOTwR82RR2WqcBzU91HYFp/LP3M/M5dFoMnxq4MElBkNpq2HqHQVsbwfoKDLItfvWcYZZY3Pu2WWOhDe8T18TD8wLtyfQuOai8V2A2KGWnxeOpyWvAIY6Nphpmn0vcOY/otIPnCDtmYZLZMRx+pv2Q3CKht9M3d8kh7z4NaO9zj3ADqVgtG81rNQMQOTT2Gaz0lRVStt7ZpA59RTtOzJSNvJ36jbr3bgkEKLmmdhzniUzmPJc8qZWYhbJt/c8QMcD3d/YQt37z05n7l23TfcjaadLTwUlLFS0sMcEELBHFHG0NaxoGwaAOgAHTZB9FXLxf/AL4zK/y6X9lhVjSre4sKhtTxC5bIw7gVEUfzsgjaf1hBy1WNcH/73PFPyar9qmVcqsT4NZ2zcOuNtB3dC6rjd6D7qlP9xCDsCIiAiIgIiICIiCuzi6wb7CtYa+Slh7O2Xne4Uuw8lpeT2jB6n8x28A5q4+rAeNPBvss0klvFJDz3HHnGtjIHV0BG0zfVygP/AOWq/kEjNAdapsT0SynFO1e+8w9cejb1e59Q7kc1o/Eee028eZylrorhseBaZ2bGgGmpgh7SseOvPUP8qQ7+PlEgegBQw4LcG+yzVyG71cPPbseaK2TcdHT77Qt9fMC//lqwFAREQEREHwuNJT3C31NBVxiSnqYnQysPc5jgQR9BKqpzGyVGNZZdsfqt+2ttZLSvJHvuR5bv6jtv86tdUB+ObGPrJrObxFHy098o46ncDp2rPubx69mscfykHv4Ccm+tWqtbjssnLDe6FwY3f300O72/2DKu95t/524oMWxdv3S3YhRvvdcPD3S8hsDT+M3yHj0OKg5pnkT8S1BsOSsLgLfXRTSBve6MOHO352lw+dTo4WIJr3RZTqhXRubU5bdpJabnHVlHCTHC35vLHqaEHaUREBQV48sS+s2qNJk0EXLTX6lBkIHTt4dmO/sGI+vdTqXFeM7Evsn0Tr6yGLnrLHI24RbDryN3bKPVyOLv0AggViV7q8byi15BQHapt1XHUx9dgSxwdsfQdtj6CrA+IbNIYOHevvVmkdK/IaOGkt3L76T3UAOnp7Nzz8yroUk9BMhqtR6zTHTmpZI+nxa4VN0rHOG7XxRAPpvoc90e3mIQTB06x6LE8DseNxBu1uoYoHkffPDRzu+d25+dZ9EQFX5xvXee4693ChleTFaqOmpom79AHRiY/rlP0KwNV/ccNnmt2vNbXyMIjutFTVMbtuh5WCEj6Yv1hBjuDWWKLiJxztSAXsqmsJ/CNNL/AP2FYkqo8LyCtxTLbVklu291W2qZUMaTsH8p3LT6CNwfQVZ3p5mNizvFKTI8fq2z0tQ3y2bjngk28qN48HD/AOiNwQUGwoiICj/nNzbqpxBWXT63O7fH8Rm+ut9kad2S1LOkcJ8DyuIBH4z/AMFfjiR19pcYjlwzBJhc8tqne5y+nHaNonOO2w235ptzsGjfY9/gDuPDVpq7TnAgy5fdciurxV3aYu5ndofex83iGAnr13cXHxQQp4pPj/y/5Y3/AA2LO8FX74Wy/J6r/AesFxSfH/l/yxv+GxZfgymbFxE461x27WOrYPX7mkP/AEQWIoiIIkfVF/3PBvXX/wCWUQ1LT6otO11ZhFMD5TI66Qj0OMAHslRLQWyY38Hbb8ki9gL3rFYdM2oxGzVDDu2WggeD5wY2lZVAVZHEP8eWZ/nef2irN1WDrxO2p1qzSVp3H18q2g/kyub/ANEG98EHx/UHyGp9hWBqvbgombFxB2djjsZqaqY30nsXO/8AiVYSgIiICIiAiIgIiIIQceGDXC3agRZzBTvktl2gjinmaNxFURt5A13m5mNaR59neZRrVruYOx5uM15ys0AsnYn3Z7u5ew5Pxubp5vn2UKINJMZ1d1AqGaQ2+vsmK0byyuu1e90lO5/eGwRO8snx2c/uI35Om4R5RSduXBvl8Zd9bcusVSPD3RHLDv8AzQ9YKp4SNVISezqMcqNv+HWvG/8AOjCCP6LttTwtawRb9nZ7fP8A+ncYh7RCxtTw3a0Qbk4Y5488dwpXfqEm6DkiydiyC/WGoFRY71cbZKDuH0lS+I7/AKJC3Ou0M1co2F02B3dwHf2LGyn6GErTL9j1/sEwhvtjudqkd3MraV8JPqDgEEhdEeKfIrXdKa06hzC7WmV4jNw7MNqKUHpzO5RtI0eO45u87nuM2IJYp4I54JGSxSND2PYd2uaRuCD4ghVHqyfhZuU914f8Rqql7nSMpH04J7+WKV8Tf7LAgjVxn6QV1hymq1AsdI6ayXOTtK8Rt39yVDvfOcPBjz15vwiQdt27xtVt9TBDU08lPUwxzQytLJI5GhzXtI2IIPQgjwXANQ+FDAshqZK3HqurxipkO5jgaJqbc+IjcQR6muA9CCCDHOY8PY4tc07gg7EFbLHqDnsVGKOPN8mZTAbCFt1nDB+jzbKQj+DK9Co5WZ1b3Q/hmgeHfzefb9a3bCOELDLXUMqMovlwyBzTv2EbPckLvQ4NLnn5nBBF/SDS/LNV8kMFtZKKRsgNfdKgExwA9+5Pv3kdzR1PjsNyLEdOMNseBYlR41YKfsqWnG7nu2Mk0h99I8+Lj+roBsAAspYbParDaoLVZbfTW+hgbyxQU8YYxvzDx857yvcgjf8AVBIJX6UWWdjC6OK9sDyB73eGXbdQcVr2XY5Zcsx6qsGQ0EddbqpobLC8kb7HcEEbEEEAgg7hcRl4RdLnyue2vyeNpO4Y2si2b6BvET9JQRj4Vs4osC1hoLldZhBbK2J9BWTHujZJsWuPoD2sJ8w3KsdhljmhZNDIySKRocx7HbtcD1BBHeFHz7ULS/8AhPKf6ZD/AKK61pXgdp05xYY5ZKu41NEJ3zNNdMJHsLgN2ghrQG9N9tu8lB/NWs5tOnuD3DIrpURMdFE4UkDneVUTkeRG0d53O2/mG5PQKrueWSeeSeZ5fJI4ve495JO5Ksa1Y0Gw7UvJWX/Ibjfo6hlO2BkdLVMbE1oJPRro3bE79eq1D7ULS/8AhPKf6ZD/AKKCCKnrwS57br/pZTYnLVRtvFjL43QOds+SAvLmSNHiBzch27uUb943+H2oWl/8J5T/AEyH/RWQxvha08x/IKC+W67ZQyroKhlRETWxbFzXAgHaIHY7bEb9xKDuq4xxe59bcR0luloNXH9eL7TuoqWmDvLMb/JlkI7w0MLhv5yAuzriWbcM2A5flVxyS73TJfdtfMZpRHWRhjSfvWgxkho7gN0FfKKd32oWl/8ACeU/0yH/AEU+1C0v/hPKf6ZD/ooOi6AZ7bdQNM7Vc6aqjkr4KeOnuUPN5cU7WgO3HgHbcwPiD610Bcg0y4ecK09y+myew3PIXVkDHs7Ooq43RSNewtIc1sbSdt9x17wD4Lr6Ao+cTHDzS566bKMTEFDkwbvPC7ZsVft+EfvZPM7uPcfOJBogqeyWw3rGrxNaL/bKq210J2fDURlrvWPOD4Ebg+CxqtVzPDcWzK3igyixUV1gbvydvHu+PfvLHjymH0tIXB8s4PsMr53zY7kV1svN1EUrG1UbPVuWu29bighEilRLwZ3wTbRZzbnRb++dQva7b1cx/vWcsXBlbY5WvvmdVdQz76OjoGwn5nue/wBlBDxrXOcGtBc4nYADqSpG6B8Md8yeenvmdw1FmsYIeyjduyqqx5iO+Jh858o+AG4cpSacaNad4C5k9ix+F1ezurqs9vUb+cOd0Z+iGroKDx2W126yWmmtNpooaKhpYxHBBC3lYxo8AP8A/br2IiDF5ZkFoxbH6y/X2tjo6CkjMksjz5u5oHi49wA6k9FVznN+myjM7zkc7Cx9yrpark335A95cG/MCB8ysU1i0dxjVOe3y5HXXmAUDXtijoqhjGHmI3JDmO3PTv6LQPtQtL/4Tyn+mQ/6KCCKmRwD57bXY9X6f11VHDcIqp1ZQMkdt20b2jnY3zlpaXbd+zt/A7bN9qFpf/CeU/0yH/RX6i4RtM4ZWSxXbK45GODmubWwgtI7iD2XQoJBovxDGIoWRBznBjQ0Fx3J2Hj6V+0BERAREQEREH4qIYqmnkp542ywysLJGOG4c0jYgjzEKsHWrDJcA1NvWMua73PTzl9I9339O/yozv4nlIB9IKtBUcdcsOsepfEjh+Ox0/az2uidWZBKOrRSB4dFC78Zzi4egSboNt4RMG+wrR6hkqoezud6P1wqtx5TQ8DsmH1M2O3gXOXYUADQAAAB0ACICIiAiIgKOfHxjP100tt+SRR801krgJHbe9hm2Y7+2IlIxYfNcctuXYpcsau7ZDQ3CAwymMgPaD1DmkggOBAI3B6hBVdZ7fVXa70dqoYzLV1k7KeBg++e9wa0fSQrU8MsVLi+JWnHaID3PbaSOmYdtublaAXH0k7k+krleCcM+neH5bbsmt9Tfamrt8vawx1dTG+Ln2IBIbGD0J3HXvAXakBERAXwuFJT19BUUNXE2WmqYnQzRu7nscCHA+sEr7ogqp1Ax2oxHN7zjVVzGS3VkkAcR79oPkv/AEm7H51J/wCp6YztDkuYzR++LLbTP2820ko/XD9C6zqfw8YHqFl0+UXme801fURsZMKOojYx/I3lDiHRuO+wA7/ALd9MMGsmneIwYzYPdLqOKR8vaVLw6V7nu3JcQAD4AdB0AQbOiIgLjHFhpPNqXhUVTZo2HIbQXS0bSQPdDHAc8O/gTsC3fpuNum5K7OiCpKtpamiq5qOsp5aepheY5YpWFr2OB2LSD1BB8FncDznLMFuZuGK3uqtsz9hI1hDo5QO4PY4FrvnB2Vheqmi+A6jl1RfbUYLly8ouNE4RVG3hzHYh+34wO3hsuD3rgym7ZzrLnbDET5MdXbyHNHpc1/X+aEGpUnF9qXDSNimtOMVMrRt2z6WYF3pIbKB9AC1PLtedXc/kbZorrLTMq3dk2hs0BidMXdOQEbyO37uXmO/mXX8f4MoxOx9/zlz4gfKioaHlcR6Hvcdv5pXfNMNI8D06jD8csrBWlvK+vqT2tS4ePln3oPiGhoPmQcq4V+H37DTDmWaQRyZC5u9HRkhzaEEe+ce4y+ro30nukgiIK2eKZrm8QGXBwIPuxp6+YxMIWt6SZM3DdS8fyaQOMNBWsknDRuTEfJk29PIXKe+qugmn+o18+vl6gr6S5uY1ktTQziN0waNm8wc1zSQOm+2+wA36Bab9qFpf/CeU/wBMh/0UHfLVcKG7W2nuVtq4aujqYxJDPE4OZI09xBC9J6DcrQdHtKcf0tp7hTY9cb1UwVxjc+KvqWyMjLObqwNa0NJ5up8dh5lntQ8ToM4xKsxm51lwpKSr5RLJQzCOXZrg7l3II2O2xG3UboIN8Z+b0GY6t+57RVMqrfZqUUTZY3bskl5nOkc0+IBIbv8AiLiCnd9qFpf/AAnlP9Mh/wBFPtQtL/4Tyn+mQ/6KDbeFTNrfmGjtlhiqo3XK0U0dBWwc3lsMY5WOI79nNAO/n3HeCusLi2CcNmDYXlVDkllu+TsrKOQPa19bH2cg8WvDYwS0+I3XaUGEzvKbRhmKV+R3upZBR0cRed3AGR23kxt87nHoB6VVlea+e63etulUQaisqJKiUjxc9xcf1lWNav6JYrqjeaS55Hcr9E6kpxBFBR1TGQgcznF3K5jvKPNsT5gPMtI+1C0v/hPKf6ZD/ooIgaL5THhWqePZPOXCnoqxpqC0bkQvBZIQPE8jndFZ7bq2juVBBX2+phqqSojEkM0Tw5kjSNwQR0IXAftQtL/4Tyn+mQ/6K6Vo/pbYdLqGvosfuN5qaatex7o6+pbI2It5urA1rQ3fm6+fYeZBvaIiAiIgIiICxGZZJZ8RxqtyK/VbaW30cfPK89SfANaPFxOwA8SVl1B3jr1AqLznkWC0c7hbbI1slSxp6S1T28258/KxwA8xc9Bqeouo2W696j2zHIJH0Fpq69lPb7e127I+Z3L2su3v3AEknuA3A267z0wfGLRhuK0GN2OnbBRUUQjYNvKefvnuPi5x3JPnKr64SnQs4h8TNRy8nbTgb/hGnlDf7WysfQEREBERAXjvNrtt6ts1tu9BTV9FO3llgqIw9jx6Qei9i+dTPDTU8tTUSshhiYXySPcGtY0Dckk9wA8UFanEPhFJgusN3xqztkdQh0c1HGSXOayVgcGec7Elo8SAFYFo1jUmH6WY5jk7Q2oo6FgqAO4Su8uQfz3OUedJ8YOs3EPetW6+md9i1urA22CRuwq5ImtZEQD4NDRIfxiB167SzQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBFxHiK4gLVpjJ9Y7VSxXfJXsDzA95ENK0jdrpSOpJ7wwbHbqSNxvGuXio1efUulbcrXGwnpE23s5R9O7v1oLAkUFrPxfaj0rmi42nHbhH4nsJInn52v2/srd7Jxm0T3Nbe8EqIW/fSUdwEh+ZrmN9pBJLUXLLZg+GXLJ7s7/Z6KIuEYOzpnnoyNvpc4gD17rUuH7FLpabHX5blTd8ryqcV9x3Gxp2Efcacb9wY07beBJHgFqeHPrNd8vt2a3G3VdvwGxyCWz0FW0B9xrB3zyNBI5IzuGjcgkHr74LvKAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgKsviLinh10zJlRzc5uszxv+C47t/skKzRQ1469Ma6C/s1KtNK+ahqo2QXXkbuYZWgNZI78VzQ1u/gWj8III04pe6zG8mtmQW5wFXbqqOpi37i5jg7Y+g7bH0FWeaa5pY8+xGjySw1LZIJ2gSxcwL6eTbyo3jwcP1jYjoQVVgto06z/ACzT+7m54rdpaKR+wmi2D4pwPB7D0d49e8b9CEFpaKIWJ8ZUrYI4sqwxskoHl1FuquUH1RvB2/nrcBxh6b8m5sOWB/mFNT7fT2yCRqKMFy4ycUjafrbh96qT4ComihB/ml60m7cVGpmWV7bPgmK0tFU1B2iZDE+uqf0egb9LCgmJkl+s2N2ia7X650ttoYR5c9RIGNHoG/eT4AdT4LglwvmRcRNwksOLtrbFprDLy3O7vZyT3TlPWGEHuafH+1+AcRgPD9luZ3OmyrXPIa24yN8uKz+6C7lB68r3N8mMedkf0jqFJu20NHbaCC326lhpKSnYI4YIWBjI2juAA6AIPPjllteO2Kjsllo4qK30cYighjHRrR/eSdySepJJPVZBEQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREFXutFsyi26mX77LqWohuVRXTTOfK0hsoLyQ9h7izbbbbptsFpytlvVmtF8pPcd6tVDc6bffsaunZMzf8lwIWtQ6T6YRT9szT7F+f02uEgeoFuwQVmWW03W917LfZrbWXGrkOzIKWF0r3fotBKlBoRwq1tRUwX3U1nualaQ+OzxybyS+P3ZzTs1v4rTufEt22MurTabVaKf3PabbRW+H/h00DYm/Q0AL2IPlR01PR0kNJSQRU9PCwRxRRMDWMaBsGgDoAB4L6oiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgL51VPBV00tLVQxzwTMLJIpGhzXtI2IIPQgjwX0RBGXVThJsF5qprlg10Fhnfu40NQwyUpd+K4eVGPR5Q8wC4Xf+GTWC1SOEOP090jB27SirY3A/ovLXfqVhyIK14dBNX5X8rcFuQO+3lvjaPpLgtosHCrq1cpGitobXZmHvdV1zX7D1Rc/VWAIgi3hHB3YaSSOozDJqu5kdTTUMYgj9ReeZzh6g0qQmE4TieFUHuLFrDRWuIgB7oY/ukm34bzu5/wCkStgRAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREH//2Q==";
+
+async function sbLoadExpenses() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/expenses?select=*&order=date.desc`, { headers: sbH });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch(e) { return []; }
+}
+async function sbAddExpense(exp) {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/expenses`, {
+      method: "POST",
+      headers: { ...sbH, "Prefer": "return=representation" },
+      body: JSON.stringify(exp),
+    });
+    if (!res.ok) { console.warn(await res.text()); return null; }
+    const rows = await res.json();
+    return rows[0];
+  } catch(e) { return null; }
+}
+async function sbDeleteExpense(id) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/expenses?id=eq.${id}`, {
+      method: "DELETE", headers: sbH,
+    });
+  } catch(e) {}
+}
+async function sbUpdateExpense(id, patch) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/expenses?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { ...sbH, "Prefer": "return=representation" },
+      body: JSON.stringify(patch),
+    });
+  } catch(e) {}
+}
+
+/* ─── SESSION PERSISTENCE ────────────────────────────────── */
+const LS_KEY = "gwm_session_v2";
+function lsGet(key, def){
+  try{ const v=localStorage.getItem(key); return v!=null?JSON.parse(v):def; }
+  catch{ return def; }
+}
+function lsSet(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }catch{}
+}
+
+
 /* ─── TOKENS ─────────────────────────────────────────────── */
 const T = {
   bg:"#f5f2ee", card:"#ffffff", border:"#e8e2da",
@@ -89,27 +138,33 @@ const GlobalStyles = () => (
 
 /* ─── COL ALIASES ────────────────────────────────────────── */
 const COL = {
-  adName:      ["nome do anúncio","ad name"],
+  adName:      ["nome do anúncio","ad name","anúncio"],
   campaign:    ["nome da campanha","campaign name","campaign"],
-  adset:       ["nome do conjunto de anúncios","ad set name"],
+  adset:       ["nome do conjunto de anúncios","ad set name","conjunto de anúncios"],
   country:     ["país","country"],
-  date:        ["início dos relatórios","reporting starts","date","start"],
+  date:        ["início dos relatórios","reporting starts","date","start","dia"],
   reach:       ["alcance","reach"],
-  impressions: ["impressões","impressions"],
-  frequency:   ["frequência","frequency"],
-  lpv:         ["visualizações da página de destino do site","visualizações da página de destino","landing page views"],
-  addCart:     ["adições ao carrinho","add to cart"],
-  checkout:    ["finalizações de compra no site","finalizações de compra","checkouts iniciados","checkouts","initiate checkout"],
-  purchases:   ["compras","purchases"],
-  spend:       ["valor usado (brl)","valor usado","amount spent (brl)","amount spent"],
+  impressions: ["impressões","impressions","impressao"],
+  frequency:   ["frequência","frequencia","frequency"],
+  lpv:         ["visualizações da página de destino do site","visualizações da página de destino","landing page views","vis. pág. de destino"],
+  addCart:     ["adições ao carrinho","add to cart","adição ao carrinho"],
+  checkout:    ["finalizações de compra iniciadas","finalizações de compra no site","finalizações de compra","checkouts iniciados","checkouts","initiate checkout","finalização de compra"],
+  purchases:   ["compras","purchases","resultados"],
+  spend:       ["valor usado (brl)","valor usado","amount spent (brl)","amount spent","quantia gasta"],
   clicks:      ["cliques no link","link clicks","cliques","clicks"],
-  cpcMeta:     ["cpc (custo por clique no link)","cpc (cost per link click)","cpc (all)","custo por clique no link"],
+  cpcMeta:     ["cpc (custo por clique no link)","cpc (cost per link click)","cpc (all)","custo por clique no link","cpc"],
   saves:       ["saves","pin saves"],
 };
 
+function normalizeStr(s){
+  if(!s)return"";
+  return s.toLowerCase().trim()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,""); // remove accents
+}
 function findCol(headers, aliases) {
-  const h = headers.map(x => x?.toLowerCase().trim());
-  for (const a of aliases) {
+  const h = headers.map(x => normalizeStr(x));
+  const normAliases = aliases.map(normalizeStr);
+  for (const a of normAliases) {
     const i = h.findIndex(x => x === a || x?.includes(a));
     if (i !== -1) return headers[i];
   }
@@ -124,6 +179,17 @@ function getNum(row, aliases) {
 function getStr(row, aliases) {
   const col = findCol(Object.keys(row), aliases);
   return col ? (row[col]||"—") : "—";
+}
+
+/* ─── OBJECTIVE DETECTION ───────────────────────────────── */
+function detectObjective(campaignName) {
+  const n = (campaignName||"").toLowerCase();
+  if(/venda|sales|compra|purchase|convers|checkout/.test(n)) return "Vendas";
+  if(/tráfeg|trafeg|traffic|clique|link click|vis.*pág|landing/.test(n)) return "Tráfego";
+  if(/reconhec|awareness|alcance|reach|brand/.test(n)) return "Reconhecimento";
+  if(/engaj|engag|interact/.test(n)) return "Engajamento";
+  if(/lead/.test(n)) return "Leads";
+  return "Outro";
 }
 
 /* ─── FORMATTERS ─────────────────────────────────────────── */
@@ -145,7 +211,7 @@ function parseMeta(text, dateFrom, dateTo) {
   });
 
   const totals = { reach:0,impressions:0,frequency:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0 };
-  const byCreative={}, byCountry={}, byCampaign={}, byDay={}, byMonth={};
+  const byCreative={}, byCountry={}, byCampaign={}, byDay={}, byMonth={}, byObjective={};
   let freqCount=0; // rows with frequency data for averaging
 
   for (const r of rows) {
@@ -154,6 +220,7 @@ function parseMeta(text, dateFrom, dateTo) {
     const lpv=getNum(r,COL.lpv), addCart=getNum(r,COL.addCart);
     const checkout=getNum(r,COL.checkout), purchases=getNum(r,COL.purchases);
     const spend=getNum(r,COL.spend), clicks=getNum(r,COL.clicks);
+    const cpcDirect=getNum(r,COL.cpcMeta); // CPC direto do Meta (mais confiável)
     const adName=getStr(r,COL.adName), campaign=getStr(r,COL.campaign);
     const adset=getStr(r,COL.adset), country=getStr(r,COL.country);
     const dateStr=getStr(r,COL.date).slice(0,10);
@@ -172,9 +239,19 @@ function parseMeta(text, dateFrom, dateTo) {
       m.lpv=(m.lpv||0)+lpv; m.addCart=(m.addCart||0)+addCart;
       m.checkout=(m.checkout||0)+checkout; m.purchases=(m.purchases||0)+purchases;
       m.spend=(m.spend||0)+spend; m.clicks=(m.clicks||0)+clicks;
+      // frequency: weighted avg by impressions
+      if(freq>0&&impressions>0){
+        m._freqImprSum=(m._freqImprSum||0)+freq*impressions;
+        m._freqImprTotal=(m._freqImprTotal||0)+impressions;
+      }
+      // CPC: take best non-zero value seen
+      if(cpcDirect>0) m._cpcSum=(m._cpcSum||0)+cpcDirect, m._cpcCount=(m._cpcCount||0)+1;
     };
     add(byCreative, adName,   ()=>({campaign,adset,reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0}));
     add(byCampaign, campaign, ()=>({reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0}));
+    const obj=detectObjective(campaign);
+    add(byObjective, obj, ()=>({reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0,campaigns:new Set()}));
+    if(byObjective[obj]&&campaign!=="—") byObjective[obj].campaigns.add(campaign);
 
     if(country!=="—"){
       if(!byCountry[country])byCountry[country]={purchases:0,spend:0,impressions:0,lpv:0,addCart:0,checkout:0,clicks:0};
@@ -204,7 +281,9 @@ function parseMeta(text, dateFrom, dateTo) {
   totals.ctr=totals.impressions>0?(totals.clicks/totals.impressions)*100:0;
   totals.freqAvg=freqCount>0?totals.frequency/freqCount:0;
   totals.hasCheckout=totals.checkout>0;
-  return { totals, byCreative, byCountry, byCampaign, byDay, byMonth, rowCount:rows.length };
+  // Convert campaigns Sets to arrays for serialization
+  for(const obj of Object.values(byObjective)) obj.campaigns=[...obj.campaigns];
+  return { totals, byCreative, byCountry, byCampaign, byDay, byMonth, byObjective, rowCount:rows.length };
 }
 
 function parseShopify(text, dateFrom, dateTo) {
@@ -897,6 +976,216 @@ function DailyAttributionTable({meta, shopify, rate}){
 }
 
 
+/* ─── COLLAPSIBLE SECTION ────────────────────────────────── */
+const LS_KEY = "gwm_widgets_v1";
+function lsGet(id, def) {
+  try { const s=localStorage.getItem(LS_KEY); if(!s)return def; const p=JSON.parse(s); return p[id]??def; } catch{ return def; }
+}
+function lsSet(id, val) {
+  try { const s=localStorage.getItem(LS_KEY); const p=s?JSON.parse(s):{}; p[id]=val; localStorage.setItem(LS_KEY,JSON.stringify(p)); } catch{}
+}
+
+function Collapsible({title, color, children, defaultOpen=true, id=null, extra=null}){
+  const storageId = id || title;
+  const[open,setOpen]=useState(()=>lsGet(storageId, defaultOpen));
+
+  const toggle=()=>{
+    setOpen(o=>{
+      const next=!o;
+      lsSet(storageId, next);
+      return next;
+    });
+  };
+
+  return(
+    <div style={{marginBottom:20}}>
+      <div onClick={toggle} style={{
+        display:"flex",justifyContent:"space-between",alignItems:"center",
+        cursor:"pointer",padding:"8px 0",userSelect:"none",
+        borderBottom:`2px solid ${open?color:T.border}`,marginBottom:open?12:0,
+        transition:"border-color 0.15s",
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:9,fontWeight:700,color:open?color:T.muted,
+            letterSpacing:"0.16em",textTransform:"uppercase",
+            fontFamily:"'Syne',sans-serif"}}>{title}</span>
+          {extra}
+        </div>
+        <span style={{fontSize:10,color:T.faint,fontFamily:"'Syne',sans-serif",fontWeight:600,
+          transition:"transform 0.2s",display:"inline-block",transform:open?"":"rotate(-90deg)"}}>
+          ▼
+        </span>
+      </div>
+      {open&&<div>{children}</div>}
+    </div>
+  );
+}
+
+/* ─── EXPORT CSV BUTTON ──────────────────────────────────── */
+function ExportBtn({data, cols, filename}){
+  const doExport=()=>{
+    if(!data?.length)return;
+    const headers=cols.map(c=>c.label).join(",");
+    const rows=data.map(row=>
+      cols.map(c=>{
+        const v=row[c.key];
+        const str=v==null?"":String(v);
+        return str.includes(",")||str.includes('"')?`"${str.replace(/"/g,'""')}"`:str;
+      }).join(",")
+    );
+    const csv=[headers,...rows].join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=filename||"export.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+  return(
+    <button onClick={e=>{e.stopPropagation();doExport();}} style={{
+      fontSize:9,padding:"3px 9px",borderRadius:20,cursor:"pointer",
+      border:`1px solid ${T.border}`,background:"transparent",color:T.muted,
+      fontFamily:"'Syne',sans-serif",fontWeight:600,letterSpacing:"0.06em",
+      display:"flex",alignItems:"center",gap:4,
+    }}>↓ CSV</button>
+  );
+}
+
+
+/* ─── OBJECTIVE PANEL ────────────────────────────────────── */
+const OBJ_ICONS = {"Vendas":"🛍","Tráfego":"🔗","Reconhecimento":"📢","Engajamento":"💬","Leads":"🎯","Outro":"📊"};
+const OBJ_COLOR = {"Vendas":T.good,"Tráfego":T.meta,"Reconhecimento":"#7c3aed","Engajamento":T.warn,"Leads":"#0891b2","Outro":T.muted};
+
+function ObjectivePanel({meta, shopify, rate}){
+  const[activeObj,setActiveObj]=useState("all");
+
+  const objectives=useMemo(()=>{
+    if(!meta?.byObjective)return[];
+    return Object.entries(meta.byObjective)
+      .map(([name,d])=>{
+        const cpa=d.purchases>0?d.spend/d.purchases:0;
+        const cpm=d.impressions>0?(d.spend/d.impressions)*1000:0;
+        const ctr=d.impressions>0&&d.clicks>0?(d.clicks/d.impressions)*100:0;
+        const cpc=d.clicks>0?d.spend/d.clicks:0;
+        const costLpv=d.lpv>0?d.spend/d.lpv:0;
+        // For Vendas: try to get Shopify revenue for campaigns in this obj
+        // We approximate: (obj spend / total spend) * total shopify revenue
+        const spendShare=meta.totals.spend>0?d.spend/meta.totals.spend:0;
+        const revBRL=(shopify?.totalRevenue||0)*rate*spendShare;
+        const roas=d.spend>0&&revBRL>0?revBRL/d.spend:0;
+        return { name, ...d, cpa, cpm, ctr, cpc, costLpv, revBRL, roas,
+          campCount:d.campaigns?.length||0 };
+      })
+      .sort((a,b)=>b.spend-a.spend);
+  },[meta,shopify,rate]);
+
+  if(!objectives.length) return null;
+
+  const allData = activeObj==="all" ? null : objectives.find(o=>o.name===activeObj);
+  const totSpend = objectives.reduce((s,o)=>s+o.spend,0);
+
+  return(
+    <div style={{marginBottom:20}}>
+      {/* Objective cards — click to filter */}
+      <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <div onClick={()=>setActiveObj("all")} style={{
+          flex:"0 0 auto",cursor:"pointer",padding:"10px 14px",borderRadius:10,
+          border:`2px solid ${activeObj==="all"?T.violet:T.border}`,
+          background:activeObj==="all"?T.violetL:T.card,
+          display:"flex",alignItems:"center",gap:8,transition:"all 0.15s",
+        }}>
+          <span style={{fontSize:16}}>📊</span>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:T.violet,fontFamily:"'Syne',sans-serif"}}>TOTAL</div>
+            <div style={{fontSize:12,fontWeight:700,color:T.text}}>{fmtR(totSpend)}</div>
+          </div>
+        </div>
+        {objectives.map(obj=>{
+          const color=OBJ_COLOR[obj.name]||T.muted;
+          const icon=OBJ_ICONS[obj.name]||"📊";
+          const pct=totSpend>0?(obj.spend/totSpend*100).toFixed(0):0;
+          const isActive=activeObj===obj.name;
+          return(
+            <div key={obj.name} onClick={()=>setActiveObj(isActive?"all":obj.name)} style={{
+              flex:"0 0 auto",cursor:"pointer",padding:"10px 14px",borderRadius:10,
+              border:`2px solid ${isActive?color:T.border}`,
+              background:isActive?color+"15":T.card,
+              display:"flex",alignItems:"center",gap:8,transition:"all 0.15s",
+              minWidth:140,
+            }}>
+              <span style={{fontSize:20}}>{icon}</span>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:isActive?color:T.muted,
+                    fontFamily:"'Syne',sans-serif",letterSpacing:"0.06em"}}>{obj.name.toUpperCase()}</div>
+                  <span style={{fontSize:9,color:T.faint}}>{pct}%</span>
+                </div>
+                <div style={{fontSize:14,fontWeight:800,color:T.text,fontFamily:"'Syne',sans-serif"}}>{fmtR(obj.spend)}</div>
+                <div style={{height:3,background:"#e8e2da",borderRadius:2,marginTop:4,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:2}}/>
+                </div>
+                <div style={{fontSize:9,color:T.faint,marginTop:3}}>
+                  {obj.campCount} campanha{obj.campCount!==1?"s":""} · {fmt(obj.purchases)} compras
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Detail for selected objective */}
+      {allData&&(
+        <div style={{background:T.card,border:`2px solid ${OBJ_COLOR[allData.name]||T.border}`,
+          borderRadius:12,padding:18,animation:"fadeIn 0.2s ease"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div>
+              <div style={{fontSize:18,fontWeight:800,color:T.text,fontFamily:"'Syne',sans-serif"}}>
+                {OBJ_ICONS[allData.name]} {allData.name}
+              </div>
+              <div style={{fontSize:10,color:T.faint,marginTop:2}}>
+                {allData.campaigns?.join(" · ")||""}
+              </div>
+            </div>
+            <button onClick={()=>setActiveObj("all")} style={{
+              fontSize:10,color:T.muted,background:"none",
+              border:`1px solid ${T.border}`,borderRadius:6,
+              cursor:"pointer",padding:"4px 10px",fontFamily:"'Syne',sans-serif"}}>
+              ✕ fechar
+            </button>
+          </div>
+
+          {allData.name==="Vendas"?(
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
+              <KPI label="Gasto"       value={fmtR(allData.spend)}       accent={T.meta}/>
+              <KPI label="Compras"     value={fmt(allData.purchases)}    accent={T.good} large/>
+              <KPI label="CPA"         value={fmtR(allData.cpa)}         accent={T.warn}/>
+              <KPI label="ROAS (est.)" value={fmtX(allData.roas)}       accent={allData.roas>=3?T.good:allData.roas>=1?T.warn:T.bad}
+                sub="receita Shopify proporcional"/>
+              <KPI label="LPV"         value={fmt(allData.lpv)}          accent={T.violet}/>
+              <KPI label="Custo/LPV"   value={fmtR(allData.costLpv)}    accent={T.violet}/>
+              <KPI label="Checkout"    value={fmt(allData.checkout)}     accent={T.warn}/>
+              <KPI label="Add Cart"    value={fmt(allData.addCart)}      accent={T.warn}/>
+              <KPI label="CPM"         value={fmtR(allData.cpm)}         accent={T.meta}/>
+            </div>
+          ):(
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
+              <KPI label="Gasto"       value={fmtR(allData.spend)}       accent={T.meta}/>
+              <KPI label="Cliques"     value={fmt(allData.clicks)}       accent={T.meta} large/>
+              <KPI label="CPC"         value={fmtR(allData.cpc)}         accent={T.meta}/>
+              <KPI label="CTR"         value={fmtPct(allData.ctr)}       accent={allData.ctr>=2?T.good:allData.ctr>=0.5?T.warn:T.bad}/>
+              <KPI label="CPM"         value={fmtR(allData.cpm)}         accent={T.meta}/>
+              <KPI label="LPV"         value={fmt(allData.lpv)}          accent={T.violet}/>
+              <KPI label="Custo/LPV"   value={fmtR(allData.costLpv)}    accent={T.violet}/>
+              <KPI label="Alcance"     value={fmt(allData.reach)}        accent={T.muted}/>
+              <KPI label="Impressões"  value={fmt(allData.impressions)}  accent={T.muted}/>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 /* ─── MONTHLY VIEW ───────────────────────────────────────── */
 function MonthlyView({meta,shopify,rate}){
   const rows=useMemo(()=>{
@@ -1021,79 +1310,25 @@ function ConsolidatedTab({meta,shopify,rate}){
         <KPI label="CVR LPV→Compra" value={fmtPct(meta?.totals.cvr)}             accent={T.violet}/>
       </div>
 
-      <Collapsible title="Visão Mensal Consolidada" color={T.violet}>
+      <Collapsible title="Por Objetivo de Campanha" color={T.meta} id="obj-panel">
+        <ObjectivePanel meta={meta} shopify={shopify} rate={rate}/>
+      </Collapsible>
+      <Collapsible title="Visão Mensal Consolidada" color={T.violet} id="monthly">
         <MonthlyView meta={meta} shopify={shopify} rate={rate}/>
       </Collapsible>
-      <Collapsible title="Tendência Diária" color={T.violet}>
+      <Collapsible title="Tendência Diária" color={T.violet} id="daily-chart">
         <DailyChart data={dailyData}/>
       </Collapsible>
-      <Collapsible title="Atribuição Diária — Meta vs Shopify" color={T.meta}>
+      <Collapsible title="Atribuição Diária — Meta vs Shopify" color={T.meta} id="daily-attrib">
         <DailyAttributionTable meta={meta} shopify={shopify} rate={rate}/>
       </Collapsible>
-      <Collapsible title="Meta × Shopify por País" color={T.violet}>
+      <Collapsible title="Meta × Shopify por País" color={T.violet} id="country-cross">
         <CountryCrossover meta={meta} shopify={shopify} rate={rate}/>
       </Collapsible>
-      <Collapsible title="Insights & Sugestões" color={T.warn}>
+      <Collapsible title="Insights & Sugestões" color={T.warn} id="insights">
         <SuggestionsPanel meta={meta} shopify={shopify} rate={rate}/>
       </Collapsible>
     </div>
-  );
-}
-
-
-/* ─── COLLAPSIBLE SECTION ────────────────────────────────── */
-function Collapsible({title, color, children, defaultOpen=true, extra=null}){
-  const[open,setOpen]=useState(defaultOpen);
-  return(
-    <div style={{marginBottom:20}}>
-      <div onClick={()=>setOpen(o=>!o)} style={{
-        display:"flex",justifyContent:"space-between",alignItems:"center",
-        cursor:"pointer",padding:"8px 0",userSelect:"none",
-        borderBottom:`2px solid ${open?color:T.border}`,marginBottom:open?12:0,
-        transition:"border-color 0.15s",
-      }}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:9,fontWeight:700,color:open?color:T.muted,
-            letterSpacing:"0.16em",textTransform:"uppercase",
-            fontFamily:"'Syne',sans-serif"}}>{title}</span>
-          {extra}
-        </div>
-        <span style={{fontSize:10,color:T.faint,fontFamily:"'Syne',sans-serif",fontWeight:600,
-          transition:"transform 0.2s",display:"inline-block",transform:open?"":"rotate(-90deg)"}}>
-          ▼
-        </span>
-      </div>
-      {open&&<div>{children}</div>}
-    </div>
-  );
-}
-
-/* ─── EXPORT CSV BUTTON ──────────────────────────────────── */
-function ExportBtn({data, cols, filename}){
-  const doExport=()=>{
-    if(!data?.length)return;
-    const headers=cols.map(c=>c.label).join(",");
-    const rows=data.map(row=>
-      cols.map(c=>{
-        const v=row[c.key];
-        const str=v==null?"":String(v);
-        return str.includes(",")||str.includes('"')?`"${str.replace(/"/g,'""')}"`:str;
-      }).join(",")
-    );
-    const csv=[headers,...rows].join("\n");
-    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url; a.download=filename||"export.csv"; a.click();
-    URL.revokeObjectURL(url);
-  };
-  return(
-    <button onClick={e=>{e.stopPropagation();doExport();}} style={{
-      fontSize:9,padding:"3px 9px",borderRadius:20,cursor:"pointer",
-      border:`1px solid ${T.border}`,background:"transparent",color:T.muted,
-      fontFamily:"'Syne',sans-serif",fontWeight:600,letterSpacing:"0.06em",
-      display:"flex",alignItems:"center",gap:4,
-    }}>↓ CSV</button>
   );
 }
 
@@ -1119,16 +1354,18 @@ function CreativeImageCell({adName, images, onUpload}){
           onChange={e=>handleFile(e.target.files[0])}/>
         {url?(
           <img src={url} alt={shortName}
-            style={{width:44,height:44,objectFit:"cover",borderRadius:6,
-              border:`1.5px solid ${T.border}`,display:"block"}}
-            title="Clique para trocar"/>
+            style={{width:48,height:48,objectFit:"cover",borderRadius:7,
+              border:`2px solid ${T.violet}`,display:"block",flexShrink:0}}
+            title="Clique para trocar imagem"/>
         ):(
-          <div style={{width:44,height:44,borderRadius:6,
-            border:`1.5px dashed ${T.faint}`,background:"#faf8f5",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:16,opacity:0.5}}
-            title="Clique para adicionar imagem">
-            {uploading?"⏳":"🖼"}
+          <div style={{width:48,height:48,borderRadius:7,flexShrink:0,
+            border:`2px dashed ${uploading?T.violet:T.faint}`,
+            background:uploading?T.violetL:"#faf8f5",
+            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+            gap:1}}
+            title="Clique para adicionar imagem do criativo">
+            <span style={{fontSize:14}}>{uploading?"⏳":"🖼"}</span>
+            {!uploading&&<span style={{fontSize:7,color:T.faint,letterSpacing:"0.05em"}}>ADD</span>}
           </div>
         )}
       </label>
@@ -1142,21 +1379,191 @@ function CreativeImageCell({adName, images, onUpload}){
   );
 }
 
+/* ─── CREATIVES TABLE ────────────────────────────────────── */
+function CreativesTable({rows, sort, onSort, images, onImageUpload}){
+  const[expanded,setExpanded]=useState(null); // expanded row name
+
+  if(!rows?.length) return(
+    <div style={{padding:28,textAlign:"center",color:T.faint,fontSize:12}}>
+      Exporte na aba Anúncios (não Conjuntos)
+    </div>
+  );
+
+  const TH=(k,label,align="right")=>(
+    <th key={k} onClick={()=>onSort(k)} style={{
+      padding:"8px 10px",fontSize:9,color:sort?.key===k?T.meta:T.muted,
+      letterSpacing:"0.1em",textTransform:"uppercase",textAlign:align,
+      borderBottom:`2px solid ${sort?.key===k?T.meta:T.border}`,
+      cursor:"pointer",whiteSpace:"nowrap",background:"#faf8f5",
+      fontFamily:"'Syne',sans-serif",userSelect:"none",
+    }}>{label}{sort?.key===k?(sort.dir==="asc"?" ↑":" ↓"):""}</th>
+  );
+
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+      {/* Upload hint */}
+      <div style={{padding:"8px 14px",background:T.violetL,borderBottom:`1px solid ${T.border}`,
+        fontSize:10,color:T.violet,display:"flex",alignItems:"center",gap:6}}>
+        <span>🖼</span>
+        <span><b>Clique no quadrado</b> ao lado do nome para subir a imagem do criativo. Clique no nome para expandir.</span>
+      </div>
+      {/* Header */}
+      <div style={{padding:"10px 14px",borderBottom:`1px solid ${T.border}`,
+        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <SectionTitle color={T.meta} mb={0}>{rows.length} Criativos</SectionTitle>
+        <ExportBtn data={rows} filename="criativos.csv" cols={[
+          {key:"name",label:"Criativo"},{key:"reach",label:"Alcance"},
+          {key:"impressions",label:"Impressões"},{key:"freq",label:"Frequência"},
+          {key:"clicks",label:"Cliques"},{key:"ctr",label:"CTR%"},
+          {key:"cpm",label:"CPM"},{key:"cpc",label:"CPC"},
+          {key:"lpv",label:"LPV"},{key:"addCart",label:"Cart"},
+          {key:"purchases",label:"Compras"},{key:"spend",label:"Gasto"},
+          {key:"cpa",label:"CPA"},{key:"cvr",label:"CVR%"},
+        ]}/>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr>
+              {TH("name","Criativo","left")}
+              {TH("reach","Alcance")}
+              {TH("impressions","Impr.")}
+              {TH("freq","Freq.")}
+              {TH("clicks","Cliques")}
+              {TH("ctr","CTR")}
+              {TH("cpm","CPM")}
+              {TH("cpc","CPC")}
+              {TH("lpv","LPV")}
+              {TH("addCart","Cart")}
+              {TH("purchases","Compras")}
+              {TH("spend","Gasto")}
+              {TH("cpa","CPA")}
+              {TH("cvr","CVR")}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row,i)=>{
+              const isExp=expanded===row.name;
+              // Parse name: Meta exports as "Campaign | Adset | Ad"
+              const parts=row.name.split("|").map(s=>s.trim());
+              const adLabel=parts[parts.length-1]; // last segment = ad name
+              const hierarchy=parts.length>1?parts.slice(0,-1).join(" › "):"";
+              return(
+                <>
+                  <tr key={row.name} style={{background:i%2===0?"#fffcf9":T.card,
+                    borderBottom:isExp?`2px solid ${T.meta}`:"none"}}>
+                    {/* Name cell */}
+                    <td style={{padding:"8px 10px",minWidth:220,maxWidth:300}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <CreativeImageCell adName={row.name} images={images} onUpload={onImageUpload}/>
+                        <div style={{minWidth:0}}>
+                          <div onClick={()=>setExpanded(isExp?null:row.name)}
+                            style={{fontWeight:700,fontSize:11,color:T.text,cursor:"pointer",
+                              wordBreak:"break-word",lineHeight:1.3,
+                              textDecoration:isExp?"underline":"none",
+                              textDecorationColor:T.meta}}>
+                            {adLabel}
+                          </div>
+                          {hierarchy&&<div style={{fontSize:9,color:T.faint,marginTop:2,lineHeight:1.2}}>{hierarchy}</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmt(row.reach)}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmt(row.impressions)}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",
+                      color:row.freq>3?T.bad:row.freq>2?T.warn:row.freq>0?T.good:T.faint,fontWeight:row.freq>0?700:400}}>
+                      {row.freq>0?row.freq.toFixed(2)+"×":"—"}
+                    </td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{row.clicks>0?fmt(row.clicks):"—"}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",fontWeight:700,
+                      color:row.ctr>=2?T.good:row.ctr>=0.5?T.warn:row.ctr>0?T.bad:T.faint}}>
+                      {row.ctr>0?fmtPct(row.ctr):"—"}
+                    </td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{row.cpm>0?fmtR(row.cpm):"—"}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{row.cpc>0?fmtR(row.cpc):"—"}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.violet}}>{fmt(row.lpv)}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.warn}}>{fmt(row.addCart)}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",fontWeight:700,
+                      color:row.purchases>0?T.good:T.faint}}>{fmt(row.purchases)}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(row.spend)}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",
+                      color:row.cpa>0?T.text:T.faint}}>{row.cpa>0?fmtR(row.cpa):"—"}</td>
+                    <td style={{padding:"8px 10px",fontSize:11,textAlign:"right",
+                      color:row.cvr>=3?T.good:row.cvr>=1?T.warn:row.cvr>0?T.bad:T.faint}}>
+                      {row.cvr>0?fmtPct(row.cvr):"—"}
+                    </td>
+                  </tr>
+                  {/* Expanded detail row */}
+                  {isExp&&(
+                    <tr key={row.name+"_exp"} style={{background:T.metaL}}>
+                      <td colSpan={14} style={{padding:"12px 16px"}}>
+                        <div style={{fontSize:9,color:T.muted,marginBottom:6,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif"}}>Nome completo</div>
+                        <div style={{fontSize:11,color:T.text,fontWeight:600,wordBreak:"break-all",marginBottom:10,fontFamily:"monospace",background:"#fff",padding:"6px 10px",borderRadius:6,border:`1px solid ${T.border}`}}>{row.name}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+                          {[
+                            {l:"Alcance",    v:fmt(row.reach),           c:T.meta},
+                            {l:"Impressões", v:fmt(row.impressions),     c:T.meta},
+                            {l:"Frequência", v:row.freq>0?row.freq.toFixed(2)+"×":"—", c:row.freq>3?T.bad:row.freq>2?T.warn:T.good},
+                            {l:"Cliques",    v:row.clicks>0?fmt(row.clicks):"—", c:T.meta},
+                            {l:"CTR",        v:row.ctr>0?fmtPct(row.ctr):"—",   c:row.ctr>=2?T.good:row.ctr>=0.5?T.warn:T.bad},
+                            {l:"CPM",        v:row.cpm>0?fmtR(row.cpm):"—",    c:T.muted},
+                            {l:"CPC",        v:row.cpc>0?fmtR(row.cpc):"—",    c:T.muted},
+                            {l:"LPV",        v:fmt(row.lpv),             c:T.violet},
+                            {l:"Add Cart",   v:fmt(row.addCart),         c:T.warn},
+                            {l:"Compras",    v:fmt(row.purchases),       c:T.good},
+                            {l:"Gasto",      v:fmtR(row.spend),         c:T.meta},
+                            {l:"CPA",        v:row.cpa>0?fmtR(row.cpa):"—", c:T.text},
+                            {l:"CVR",        v:row.cvr>0?fmtPct(row.cvr):"—", c:row.cvr>=3?T.good:T.warn},
+                          ].map(k=>(
+                            <div key={k.l} style={{background:"#fff",borderRadius:7,padding:"7px 10px",borderTop:`2px solid ${k.c}`}}>
+                              <div style={{fontSize:8,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:2}}>{k.l}</div>
+                              <div style={{fontSize:13,fontWeight:700,color:k.c,fontFamily:"'Syne',sans-serif"}}>{k.v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+
 /* ─── TAB: META ADS ──────────────────────────────────────── */
 function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
   const[sub,setSub]=useState("overview");
 
   const creativeRows=useMemo(()=>{
     if(!meta)return[];
-    return Object.entries(meta.byCreative).map(([name,d])=>({
-      name,impressions:d.impressions,lpv:d.lpv,addCart:d.addCart,
-      checkout:d.checkout,purchases:d.purchases,spend:d.spend,
-      cpa:d.purchases>0?d.spend/d.purchases:0,
-      cvr:d.lpv>0?(d.purchases/d.lpv)*100:0,
-      costLpv:d.lpv>0?d.spend/d.lpv:0,
-      ctr:d.impressions>0?((d.clicks||0)/d.impressions)*100:0,
-      cpm:d.impressions>0?(d.spend/d.impressions)*1000:0,
-    }));
+    return Object.entries(meta.byCreative).map(([name,d])=>{
+      // CPC: prefer direct from Meta export, fallback to spend/clicks
+      const cpcDirect=d._cpcCount>0?d._cpcSum/d._cpcCount:0;
+      // clicks: derive from CPC if zero (spend/cpc)
+      const clicks=d.clicks>0?d.clicks:(cpcDirect>0?Math.round(d.spend/cpcDirect):0);
+      const cpc=cpcDirect>0?cpcDirect:(clicks>0?d.spend/clicks:0);
+      const cpm=d.impressions>0?(d.spend/d.impressions)*1000:0;
+      const ctr=d.impressions>0&&clicks>0?(clicks/d.impressions)*100:0;
+      const freq=d._freqImprTotal>0?d._freqImprSum/d._freqImprTotal:0;
+      return {
+        name,                     // full name — display handled in render
+        reach:d.reach||0,
+        impressions:d.impressions,
+        freq,
+        clicks,
+        ctr, cpm, cpc,
+        lpv:d.lpv, addCart:d.addCart,
+        checkout:d.checkout, purchases:d.purchases, spend:d.spend,
+        cpa:d.purchases>0?d.spend/d.purchases:0,
+        cvr:d.lpv>0?(d.purchases/d.lpv)*100:0,
+        costLpv:d.lpv>0?d.spend/d.lpv:0,
+      };
+    });
   },[meta]);
 
   const countryRows=useMemo(()=>{
@@ -1206,7 +1613,7 @@ function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
 
           {sub==="overview"&&(
             <>
-              <Collapsible title="Investimento & Alcance" color={T.meta}>
+              <Collapsible title="Investimento & Alcance" color={T.meta} id="meta-invest">
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
                   <KPI label="Valor Gasto"   value={fmtR(meta.totals.spend)}      accent={T.meta}/>
                   <KPI label="Alcance"       value={fmt(meta.totals.reach)}        accent={T.meta}/>
@@ -1222,7 +1629,7 @@ function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
                     sub="custo/clique"/>
                 </div>
               </Collapsible>
-              <Collapsible title="Funil de Conversão" color={T.violet}>
+              <Collapsible title="Funil de Conversão" color={T.violet} id="meta-funil">
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
                   <KPI label="Vis. Pág."    value={fmt(meta.totals.lpv)}          accent={T.violet}/>
                   <KPI label="Custo/LPV"   value={fmtR(meta.totals.costLpv)}    accent={T.violet}/>
@@ -1263,33 +1670,11 @@ function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
           )}
 
           {sub==="criativos"&&(
-            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <SectionTitle color={T.meta} mb={0}>Criativos — {sC.length} anúncios</SectionTitle>
-                <ExportBtn data={sC} filename="criativos.csv" cols={[
-                  {key:"name",label:"Criativo"},{key:"impressions",label:"Impressões"},
-                  {key:"lpv",label:"LPV"},{key:"addCart",label:"Cart"},
-                  {key:"purchases",label:"Compras"},{key:"spend",label:"Gasto"},
-                  {key:"cpa",label:"CPA"},{key:"costLpv",label:"R$/LPV"},
-                ]}/>
-              </div>
-              <DataTable sort={sortC} onSort={onSC}
-                emptyMsg="Exporte na aba Anúncios (não Conjuntos)"
-                cols={[
-                  {key:"name",       label:"Criativo",  align:"left", render:v=><CreativeImageCell adName={v} images={creativeImages||{}} onUpload={onImageUpload||(() => {})}/>},
-                  {key:"impressions",label:"Impr.",      render:v=>fmt(v)},
-                  {key:"lpv",        label:"LPV",        render:v=>fmt(v)},
-                  {key:"addCart",    label:"Cart",       render:v=>fmt(v)},
-                  {key:"purchases",  label:"Compras",    render:v=>fmt(v), color:v=>v>0?T.good:T.faint},
-                  {key:"spend",      label:"Gasto",      render:v=>fmtR(v)},
-                  {key:"cpa",        label:"CPA",        render:v=>v>0?fmtR(v):"—"},
-                  {key:"ctr",        label:"CTR",        render:v=>fmtPct(v), color:v=>v>=2?T.good:v>=0.5?T.warn:v>0?T.bad:T.faint},
-                  {key:"cpm",        label:"CPM",        render:v=>v>0?fmtR(v):"—"},
-                  {key:"costLpv",    label:"R$/LPV",     render:v=>v>0?fmtR(v):"—"},
-                  {key:"cvr",        label:"CVR",        render:v=>fmtPct(v)},
-                ]}
-                rows={sC}/>
-            </div>
+            <CreativesTable
+              rows={sC} sort={sortC} onSort={onSC}
+              images={creativeImages||{}}
+              onImageUpload={onImageUpload||(() => {})}
+            />
           )}
 
           {sub==="países"&&(
@@ -1674,14 +2059,329 @@ function CampaignTab({meta, shopify, rate, creativeImages, onImageUpload}){
   );
 }
 
+/* ─── TAB: FINANCEIRO ────────────────────────────────────── */
+const DEFAULT_CATEGORIES=["Mídia Meta","Mídia Pinterest","Mídia Google","Ferramenta","Freelancer","Operacional","Outro"];
+const CAT_COLORS=["#2563eb","#7c3aed","#d97706","#16a34a","#dc2626","#0891b2","#9333ea","#ea580c"];
+
+function FinancialTab({meta,shopify,rate}){
+  const[expenses,setExpenses]=useState([]);
+  const[loadingExp,setLoadingExp]=useState(true);
+  const[view,setView]=useState(lsGet("gwm_fin_view","resumo"));
+  const[form,setForm]=useState({date:new Date().toISOString().slice(0,10),category:"Mídia Meta",name:"",amount:""});
+  const[categories,setCategories]=useState(()=>lsGet("gwm_categories",DEFAULT_CATEGORIES));
+  const[newCat,setNewCat]=useState("");
+  const[saving,setSaving]=useState(false);
+  const[editId,setEditId]=useState(null);
+  const[editVal,setEditVal]=useState("");
+
+  useEffect(()=>{ sbLoadExpenses().then(rows=>{setExpenses(rows||[]);setLoadingExp(false);}); },[]);
+
+  const setViewP=(v)=>{setView(v);lsSet("gwm_fin_view",v);};
+
+  const addExpense=async()=>{
+    if(!form.name||!form.amount||isNaN(parseFloat(form.amount)))return;
+    setSaving(true);
+    const row=await sbAddExpense({date:form.date,category:form.category,name:form.name,amount:parseFloat(form.amount)});
+    if(row)setExpenses(prev=>[row,...prev]);
+    setForm(f=>({...f,name:"",amount:""}));
+    setSaving(false);
+  };
+  const deleteExpense=async(id)=>{ await sbDeleteExpense(id); setExpenses(prev=>prev.filter(e=>e.id!==id)); };
+  const saveEdit=async(id)=>{ const v=parseFloat(editVal); if(isNaN(v))return; await sbUpdateExpense(id,{amount:v}); setExpenses(prev=>prev.map(e=>e.id===id?{...e,amount:v}:e)); setEditId(null); };
+  const addCategory=()=>{
+    if(!newCat.trim())return;
+    const u=[...categories,newCat.trim()]; setCategories(u); lsSet("gwm_categories",u); setNewCat("");
+  };
+
+  // ── Computations ──────────────────────────────────
+  const metaSpend=meta?.totals.spend||0;
+  const shopifyRevBRL=(shopify?.totalRevenue||0)*rate;
+  const totalManualExp=expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const totalExp=metaSpend+totalManualExp;
+  const roasReal=totalExp>0&&shopifyRevBRL>0?shopifyRevBRL/totalExp:0;
+  const profit=shopifyRevBRL-totalExp;
+
+  const byCat={};
+  if(metaSpend>0) byCat["Mídia Meta"]=(byCat["Mídia Meta"]||0)+metaSpend;
+  for(const e of expenses){ const c=e.category||"Outro"; byCat[c]=(byCat[c]||0)+parseFloat(e.amount||0); }
+
+  // monthly chart data
+  const byMonth={};
+  if(meta?.byMonth) for(const[m,d] of Object.entries(meta.byMonth)){
+    if(!byMonth[m])byMonth[m]={exp:0,revenue:0};
+    byMonth[m].exp+=(d.spend||0);
+  }
+  if(shopify?.byMonth) for(const[m,d] of Object.entries(shopify.byMonth)){
+    if(!byMonth[m])byMonth[m]={exp:0,revenue:0};
+    byMonth[m].revenue+=(d.revenue||0)*rate;
+  }
+  for(const e of expenses){
+    const m=(e.date||"").slice(0,7); if(!m)continue;
+    if(!byMonth[m])byMonth[m]={exp:0,revenue:0};
+    byMonth[m].exp+=parseFloat(e.amount||0);
+  }
+  const chartData=Object.entries(byMonth).sort(([a],[b])=>a<b?-1:1).map(([m,d])=>{
+    const[yr,mo]=m.split("-");
+    const label=new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
+    return{label,exp:+d.exp.toFixed(2),revenue:+d.revenue.toFixed(2),
+      roas:d.exp>0&&d.revenue>0?+(d.revenue/d.exp).toFixed(2):null};
+  });
+
+  return(
+    <div>
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12,marginBottom:20}}>
+        <KPI label="Receita Shopify (BRL)" value={fmtR(shopifyRevBRL)} accent={T.shopify} large/>
+        <KPI label="Gasto Total" value={fmtR(totalExp)} accent={T.meta}
+          sub={`Mídia ${fmtR(metaSpend)} + Outros ${fmtR(totalManualExp)}`}/>
+        <KPI label="ROAS Real" value={roasReal>0?fmtX(roasReal):"—"} large
+          accent={roasReal>=3?T.good:roasReal>=1?T.warn:roasReal>0?T.bad:T.border}
+          sub="receita ÷ todos os gastos"/>
+        <KPI label="Lucro Bruto Est." value={profit!==0?fmtR(profit):"—"}
+          accent={profit>0?T.good:profit<0?T.bad:T.border}/>
+        <KPI label="Margem" value={shopifyRevBRL>0?fmtPct((profit/shopifyRevBRL)*100):"—"}
+          accent={profit>0?T.good:T.bad}/>
+      </div>
+
+      {/* Chart */}
+      {chartData.length>0&&(
+        <Collapsible title="Receita × Gasto por Mês" color={T.violet}>
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:"16px 20px"}}>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{top:4,right:8,left:0,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0ebe4" vertical={false}/>
+                <XAxis dataKey="label" tick={{fontSize:10,fill:T.faint}} tickLine={false} axisLine={false}/>
+                <YAxis tick={{fontSize:9,fill:T.faint}} tickLine={false} axisLine={false} tickFormatter={v=>"R$"+Math.round(v)}/>
+                <Tooltip content={<ChartTip/>}/>
+                <Legend wrapperStyle={{fontSize:10,paddingTop:8}}/>
+                <Bar dataKey="revenue" name="Receita R$" fill={T.shopify} radius={[3,3,0,0]}/>
+                <Bar dataKey="exp"     name="Gasto R$"   fill={T.meta}    radius={[3,3,0,0]}/>
+              </BarChart>
+            </ResponsiveContainer>
+            {chartData.some(d=>d.roas)&&(
+              <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+                {chartData.map(d=>(
+                  <div key={d.label} style={{textAlign:"center",background:T.bg,borderRadius:8,padding:"6px 12px",
+                    borderTop:`2px solid ${d.roas>=3?T.good:d.roas>=1?T.warn:d.roas>0?T.bad:T.border}`}}>
+                    <div style={{fontSize:9,color:T.muted,marginBottom:2}}>{d.label}</div>
+                    <div style={{fontSize:13,fontWeight:700,fontFamily:"'Syne',sans-serif",
+                      color:d.roas>=3?T.good:d.roas>=1?T.warn:d.roas>0?T.bad:T.faint}}>
+                      {d.roas?fmtX(d.roas):"—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Collapsible>
+      )}
+
+      {/* Breakdown */}
+      <Collapsible title="Breakdown por Categoria" color={T.meta}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))",gap:10}}>
+          {Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i)=>(
+            <div key={cat} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:9,
+              padding:"10px 13px",borderLeft:`3px solid ${CAT_COLORS[i%CAT_COLORS.length]}`}}>
+              <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:4}}>{cat}</div>
+              <div style={{fontSize:16,fontWeight:700,color:T.text,fontFamily:"'Syne',sans-serif"}}>{fmtR(amt)}</div>
+              <div style={{fontSize:10,color:T.faint,marginTop:2}}>{totalExp>0?fmtPct((amt/totalExp)*100)+" do total":""}</div>
+            </div>
+          ))}
+        </div>
+      </Collapsible>
+
+      {/* Main area */}
+      <div style={{display:"flex",gap:4,marginBottom:14,alignItems:"center"}}>
+        <span style={{fontSize:9,color:T.muted,fontFamily:"'Syne',sans-serif",letterSpacing:"0.1em",textTransform:"uppercase",marginRight:4}}>Gastos Manuais</span>
+        {[["resumo","Resumo"],["tabela","Tabela"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setViewP(k)} style={{fontSize:10,padding:"4px 12px",borderRadius:20,cursor:"pointer",
+            border:`1px solid ${view===k?T.violet:T.border}`,fontFamily:"'Syne',sans-serif",fontWeight:700,
+            background:view===k?T.violetL:"transparent",color:view===k?T.violet:T.muted}}>{l}</button>
+        ))}
+        <ExportBtn data={expenses} filename="gastos.csv" cols={[
+          {key:"date",label:"Data"},{key:"category",label:"Categoria"},{key:"name",label:"Nome"},{key:"amount",label:"Valor"},
+        ]}/>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"360px 1fr",gap:16,alignItems:"start"}}>
+        {/* Form */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18}}>
+          <SectionTitle color={T.meta}>Adicionar Gasto</SectionTitle>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>Data</div>
+              <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}
+                style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 9px",fontSize:11,boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>Categoria</div>
+              <select value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}
+                style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 9px",fontSize:11,boxSizing:"border-box"}}>
+                {categories.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>Nome / Descrição</div>
+            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+              placeholder="ex: Canva Pro, Freelancer design..."
+              style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 9px",fontSize:11,boxSizing:"border-box"}}/>
+          </div>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>Valor (R$)</div>
+            <input type="number" step="0.01" min="0" value={form.amount}
+              onChange={e=>setForm(f=>({...f,amount:e.target.value}))}
+              onKeyDown={e=>e.key==="Enter"&&addExpense()}
+              placeholder="0,00"
+              style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 9px",fontSize:11,boxSizing:"border-box"}}/>
+          </div>
+          <button onClick={addExpense} disabled={saving||!form.name||!form.amount}
+            style={{width:"100%",background:saving||!form.name||!form.amount?"#9ca3af":T.meta,
+              color:"#fff",border:"none",borderRadius:8,padding:"10px",fontSize:12,
+              fontWeight:700,cursor:"pointer",fontFamily:"'Syne',sans-serif",transition:"background 0.15s"}}>
+            {saving?"Salvando...":"+ Adicionar Gasto"}
+          </button>
+          <div style={{marginTop:16,borderTop:`1px solid ${T.border}`,paddingTop:14}}>
+            <SectionTitle color={T.muted}>Categorias</SectionTitle>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+              {categories.map(c=>(
+                <span key={c} style={{fontSize:10,background:T.bg,color:T.text,padding:"2px 9px",
+                  borderRadius:20,border:`1px solid ${T.border}`,display:"flex",gap:4,alignItems:"center"}}>
+                  {c}
+                  {!DEFAULT_CATEGORIES.includes(c)&&(
+                    <button onClick={()=>{const u=categories.filter(x=>x!==c);setCategories(u);lsSet("gwm_categories",u);}}
+                      style={{background:"none",border:"none",cursor:"pointer",color:T.faint,fontSize:11,lineHeight:1,padding:0}}>×</button>
+                  )}
+                </span>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <input value={newCat} onChange={e=>setNewCat(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&addCategory()}
+                placeholder="Nova categoria..."
+                style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 9px",fontSize:11}}/>
+              <button onClick={addCategory}
+                style={{background:T.violet,color:"#fff",border:"none",borderRadius:6,
+                  padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:700}}>+</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right panel */}
+        <div>
+          {view==="resumo"&&(
+            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18}}>
+              <SectionTitle color={T.violet}>Por Categoria</SectionTitle>
+              {loadingExp?<div style={{color:T.faint,fontSize:12}}>Carregando...</div>:
+                Object.keys(byCat).length===0
+                  ?<div style={{color:T.faint,fontSize:12}}>Nenhum gasto ainda.</div>
+                  :Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i)=>(
+                    <div key={cat} style={{marginBottom:14}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"center"}}>
+                        <span style={{fontSize:11,color:T.text,fontWeight:600}}>{cat}</span>
+                        <span style={{fontSize:12,fontWeight:700,color:T.meta,fontFamily:"'Syne',sans-serif"}}>{fmtR(amt)}</span>
+                      </div>
+                      <div style={{height:6,background:"#ede8e0",borderRadius:3,overflow:"hidden"}}>
+                        <div style={{height:"100%",borderRadius:3,
+                          width:`${totalExp>0?(amt/totalExp)*100:0}%`,
+                          background:CAT_COLORS[i%CAT_COLORS.length],transition:"width 0.4s"}}/>
+                      </div>
+                      <div style={{fontSize:9,color:T.faint,marginTop:2}}>
+                        {expenses.filter(e=>e.category===cat).length} lançamentos · {fmtPct(totalExp>0?(amt/totalExp)*100:0)} do total
+                      </div>
+                    </div>
+                  ))
+              }
+            </div>
+          )}
+          {view==="tabela"&&(
+            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+              <div style={{padding:"10px 14px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <SectionTitle color={T.violet} mb={0}>{expenses.length} Lançamentos</SectionTitle>
+                <ExportBtn data={expenses} filename="gastos.csv" cols={[
+                  {key:"date",label:"Data"},{key:"category",label:"Categoria"},{key:"name",label:"Nome"},{key:"amount",label:"Valor"},
+                ]}/>
+              </div>
+              {loadingExp?<div style={{padding:20,color:T.faint,fontSize:12}}>Carregando...</div>:(
+                expenses.length===0
+                  ?<div style={{padding:28,textAlign:"center",color:T.faint,fontSize:12}}>Nenhum lançamento ainda</div>
+                  :<div style={{overflowX:"auto",maxHeight:560,overflowY:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead style={{position:"sticky",top:0}}>
+                        <tr>
+                          {["Data","Categoria","Nome","Valor",""].map(h=>(
+                            <th key={h} style={{padding:"7px 10px",fontSize:9,color:T.muted,letterSpacing:"0.1em",
+                              textTransform:"uppercase",textAlign:h==="Valor"?"right":"left",
+                              borderBottom:`1px solid ${T.border}`,fontFamily:"'Syne',sans-serif",
+                              background:"#faf8f5",whiteSpace:"nowrap"}}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses.map((e,i)=>(
+                          <tr key={e.id} style={{background:i%2===0?"#fffcf9":T.card}}>
+                            <td style={{padding:"7px 10px",fontSize:11,color:T.muted,whiteSpace:"nowrap"}}>{e.date}</td>
+                            <td style={{padding:"7px 10px",fontSize:11}}>
+                              <span style={{background:T.metaL,color:T.meta,padding:"1px 8px",borderRadius:20,fontSize:10}}>{e.category}</span>
+                            </td>
+                            <td style={{padding:"7px 10px",fontSize:11,color:T.text,maxWidth:200}}>
+                              <span style={{display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}</span>
+                            </td>
+                            <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",fontWeight:700,color:T.meta}}>
+                              {editId===e.id?(
+                                <input type="number" autoFocus value={editVal}
+                                  onChange={ev=>setEditVal(ev.target.value)}
+                                  onKeyDown={ev=>{if(ev.key==="Enter")saveEdit(e.id);if(ev.key==="Escape")setEditId(null);}}
+                                  onBlur={()=>saveEdit(e.id)}
+                                  style={{width:80,border:`1px solid ${T.violet}`,borderRadius:4,padding:"2px 5px",fontSize:11,textAlign:"right"}}/>
+                              ):fmtR(parseFloat(e.amount||0))}
+                            </td>
+                            <td style={{padding:"7px 6px",textAlign:"right",whiteSpace:"nowrap"}}>
+                              <button onClick={()=>{setEditId(e.id);setEditVal(e.amount);}}
+                                style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:T.muted,marginRight:2}}
+                                title="Editar">✏️</button>
+                              <button onClick={()=>deleteExpense(e.id)}
+                                style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:T.faint}}
+                                title="Excluir">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{background:"#f0ece5",borderTop:`2px solid ${T.border}`}}>
+                          <td colSpan={3} style={{padding:"8px 10px",fontSize:10,fontWeight:700,fontFamily:"'Syne',sans-serif",color:T.text}}>TOTAL MANUAL</td>
+                          <td style={{padding:"8px 10px",fontSize:12,fontWeight:700,textAlign:"right",color:T.meta,fontFamily:"'Syne',sans-serif"}}>{fmtR(totalManualExp)}</td>
+                          <td/>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 /* ─── MAIN ───────────────────────────────────────────────── */
 export default function App(){
-  const[tab,setTab]=useState("consolidated");
-  const[dateFrom,setDateFrom]=useState("2026-02-03");
-  const[dateTo,setDateTo]=useState("");
-  const[dollarRate,setDollarRate]=useState(5.85);
+  const _sess=lsGet(LS_KEY,{});
+  const[tab,setTabRaw]=useState(_sess.tab||"consolidated");
+  const[dateFrom,setDateFromRaw]=useState(_sess.dateFrom||"2026-02-03");
+  const[dateTo,setDateToRaw]=useState(_sess.dateTo||"");
+  const[dollarRate,setDollarRateRaw]=useState(_sess.dollarRate||5.85);
   const[loading,setLoading]=useState(true);
   const[saveStatus,setSaveStatus]=useState("");
+
+  // Wrap setters to also persist session
+  const persist=(patch)=>lsSet(LS_KEY,{...lsGet(LS_KEY,{}), ...patch});
+  const setTab=(v)=>{setTabRaw(v);persist({tab:v});};
+  const setDateFrom=(v)=>{setDateFromRaw(v);persist({dateFrom:v});};
+  const setDateTo=(v)=>{setDateToRaw(v);persist({dateTo:v});};
+  const setDollarRate=(v)=>{setDollarRateRaw(v);persist({dollarRate:v});};
 
   const[metaRaw,setMetaRaw]=useState(null);
   const[shopifyRaw,setShopifyRaw]=useState(null);
@@ -1721,6 +2421,7 @@ export default function App(){
     {id:"meta",        label:"Meta Ads",    color:T.meta,    dot:!!meta},
     {id:"shopify",     label:"Shopify",     color:T.shopify, dot:!!shopify},
     {id:"pinterest",   label:"Pinterest",   color:T.pinterest,dot:!!pinterest},
+    {id:"financeiro",  label:"Financeiro",  color:T.good,    dot:!!(meta||shopify)},
     {id:"config",      label:"Campanha",    color:T.violet,  dot:false},
   ];
 
@@ -1745,15 +2446,7 @@ export default function App(){
       <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
         <div style={{maxWidth:1300,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"stretch",justifyContent:"space-between",height:52}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <img src="/logo.png" alt="Gallery Wall Mockups"
-              onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}}
-              style={{height:22,display:"block",objectFit:"contain"}}/>
-            <div style={{display:"none",alignItems:"center",gap:8}}>
-              <div style={{width:26,height:26,background:T.text,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <span style={{color:"#fff",fontSize:13,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>G</span>
-              </div>
-              <span style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:"'Syne',sans-serif"}}>Gallery Wall Mockups</span>
-            </div>
+            <img src={LOGO_SRC} alt="Gallery Wall Mockups" style={{height:22,display:"block",objectFit:"contain"}}/>
             <div style={{fontSize:9,color:T.faint,letterSpacing:"0.1em",textTransform:"uppercase",borderLeft:`1px solid ${T.border}`,paddingLeft:10}}>Performance Dashboard</div>
           </div>
           <div style={{display:"flex",alignItems:"stretch"}}>
@@ -1794,6 +2487,13 @@ export default function App(){
           {shopify&&<span style={{fontSize:10,color:"#065f46",background:T.shopifyL,padding:"4px 10px",borderRadius:20,border:`1px solid ${T.shopify}30`}}>
             Shopify: {shopify.totalOrders} pedidos
           </span>}
+          <button onClick={()=>{try{localStorage.removeItem(LS_KEY);}catch{}window.location.reload();}}
+            style={{fontSize:9,color:T.faint,background:"none",border:`1px solid ${T.border}`,
+              cursor:"pointer",padding:"4px 10px",borderRadius:20,fontFamily:"'Syne',sans-serif",
+              marginLeft:"auto",letterSpacing:"0.06em"}}
+            title="Resetar posição de todos os widgets">
+            ↺ layout
+          </button>
         </div>
       </div>
 
@@ -1803,6 +2503,7 @@ export default function App(){
         {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} onFile={readRaw(setMetaRaw,"meta")} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
         {tab==="shopify"     &&<ShopifyTab shopify={shopify} onFile={readRaw(setShopifyRaw,"shopify")}/>}
         {tab==="pinterest"   &&<PinterestTab pinterest={pinterest} onFile={readRaw(setPintRaw,"pinterest")}/>}
+        {tab==="financeiro"  &&<FinancialTab meta={meta} shopify={shopify} rate={dollarRate}/>}
         {tab==="config"      &&<CampaignTab meta={meta} shopify={shopify} rate={dollarRate} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
       </div>
     </div>

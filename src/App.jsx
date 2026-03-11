@@ -1,2247 +1,813 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import * as Papa from "papaparse";
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, Legend, ReferenceLine
+} from "recharts";
+/* ─── SUPABASE ───────────────────────────────────────────── */
+const SB_URL = "https://vcvtxaiksxdnczjiftap.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjdnR4YWlrc3hkbmN6amlmdGFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNTQ5NDUsImV4cCI6MjA4ODgzMDk0NX0.L5q3VIZs2nbP75ssRUYsZSe5gRwBCg8q_vHFxeUVN4A";
+const sbH = { "Content-Type":"application/json", "apikey":SB_KEY, "Authorization":`Bearer ${SB_KEY}` };
+async function sbSave(type, content) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/csv_files`, {
+      method:"POST",
+      headers:{ ...sbH, "Prefer":"resolution=merge-duplicates" },
+      body:JSON.stringify({ type, content }),
+    });
+  } catch(e) { console.warn("sbSave error", e); }
+}
+async function sbLoadAll() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/csv_files?select=type,content`, { headers: sbH });
+    if (!res.ok) return {};
+    const rows = await res.json();
+    const out = {};
+    for (const r of rows) out[r.type] = r.content;
+    return out;
+  } catch(e) { return {}; }
+}
+
+
+/* ─── TOKENS ─────────────────────────────────────────────── */
+const T = {
+  bg:"#f5f2ee", card:"#ffffff", border:"#e8e2da",
+  text:"#1a1714", muted:"#8a7f74", faint:"#c8bfb4",
+  meta:"#2563eb", metaL:"#dbeafe",
+  shopify:"#008060", shopifyL:"#d1fae5",
+  pinterest:"#e60023", pinterestL:"#fee2e5",
+  violet:"#7c3aed", violetL:"#ede9fe",
+  warn:"#d97706", warnL:"#fef3c7",
+  good:"#16a34a", bad:"#dc2626",
+};
 
 const GlobalStyles = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap');
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #c8bfb4; border-radius: 10px; }
-    input, textarea, select { font-family: inherit; }
-    tbody tr:hover td { background: #faf8f5 !important; }
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Sans:wght@400;500;600&display=swap');
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:${T.bg};font-family:'Instrument Sans',sans-serif;color:${T.text}}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-thumb{background:#d6cfc5;border-radius:10px}
+    input,select,textarea{font-family:inherit}
+    tbody tr:hover td{background:#faf8f5!important}
   `}</style>
 );
 
-const T = {
-  bg: "#f5f2ee",
-  card: "#ffffff",
-  border: "#e8e2da",
-  text: "#1a1714",
-  muted: "#8a7f74",
-  faint: "#b8b0a6",
-  meta: "#2563eb",
-  metaLight: "#dbeafe",
-  shopify: "#008060",
-  shopifyLight: "#d1fae5",
-  pinterest: "#e60023",
-  pinterestLight: "#fee2e5",
-  consolidated: "#7c3aed",
-  consolidatedLight: "#ede9fe",
-  warn: "#d97706",
-  warnLight: "#fef3c7",
-  good: "#16a34a",
-  bad: "#dc2626",
-};
-
-/* ── Exact column names from Meta PT-BR export ── */
+/* ─── COL ALIASES ────────────────────────────────────────── */
 const COL = {
-  adName: ["nome do anúncio"],
-  campaign: ["nome da campanha"],
-  adset: ["nome do conjunto de anúncios"],
-  country: ["país", "country"],
-  reach: ["alcance", "reach"],
-  impressions: ["impressões", "impressions"],
-  lpv: [
-    "visualizações da página de destino do site",
-    "visualizações da página de destino",
-    "landing page views",
-  ],
-  costLpv: [
-    "custo por visualização da página de destino (brl)",
-    "custo por visualização da página de destino",
-  ],
-  addCart: ["adições ao carrinho"],
-  checkout: ["checkouts"],
-  purchases: ["compras", "purchases"],
-  spend: ["valor usado (brl)", "valor usado", "amount spent (brl)"],
-  cpa: ["custo por compra (brl)", "custo por compra"],
-  clicks: ["cliques no link", "link clicks", "cliques"],
-  // Shopify
-  sessions: ["sessions", "sessões"],
-  cartAdds: ["added to cart", "cart additions"],
-  checkoutSh: ["reached checkout", "checkout"],
-  // Pinterest
-  saves: ["saves", "pin saves"],
+  adName:      ["nome do anúncio","ad name"],
+  campaign:    ["nome da campanha","campaign name","campaign"],
+  adset:       ["nome do conjunto de anúncios","ad set name"],
+  country:     ["país","country"],
+  date:        ["início dos relatórios","reporting starts","date","start"],
+  reach:       ["alcance","reach"],
+  impressions: ["impressões","impressions"],
+  lpv:         ["visualizações da página de destino do site","visualizações da página de destino","landing page views"],
+  addCart:     ["adições ao carrinho","add to cart"],
+  checkout:    ["checkouts"],
+  purchases:   ["compras","purchases"],
+  spend:       ["valor usado (brl)","valor usado","amount spent (brl)","amount spent"],
+  clicks:      ["cliques no link","link clicks","cliques","clicks"],
+  saves:       ["saves","pin saves"],
 };
 
 function findCol(headers, aliases) {
-  const h = headers.map((x) => x?.toLowerCase().trim());
-  for (const alias of aliases) {
-    const idx = h.findIndex((x) => x === alias || x?.includes(alias));
-    if (idx !== -1) return headers[idx];
+  const h = headers.map(x => x?.toLowerCase().trim());
+  for (const a of aliases) {
+    const i = h.findIndex(x => x === a || x?.includes(a));
+    if (i !== -1) return headers[i];
   }
   return null;
 }
 function getNum(row, aliases) {
   const col = findCol(Object.keys(row), aliases);
   if (!col) return 0;
-  const n = parseFloat(
-    String(row[col] || "0")
-      .replace(",", ".")
-      .replace(/[^\d.-]/g, "")
-  );
+  const n = parseFloat(String(row[col]||"0").replace(",",".").replace(/[^\d.-]/g,""));
   return isNaN(n) ? 0 : n;
 }
 function getStr(row, aliases) {
   const col = findCol(Object.keys(row), aliases);
-  return col ? row[col] || "—" : "—";
+  return col ? (row[col]||"—") : "—";
 }
 
-const fmt = (n, d = 0) =>
-  n == null || isNaN(n)
-    ? "—"
-    : Number(n).toLocaleString("pt-BR", {
-        minimumFractionDigits: d,
-        maximumFractionDigits: d,
-      });
-const fmtR = (n) =>
-  !n || isNaN(n)
-    ? "—"
-    : "R$ " +
-      Number(n).toLocaleString("pt-BR", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-const fmtD = (n, sym = "$") =>
-  !n || isNaN(n)
-    ? "—"
-    : sym +
-      " " +
-      Number(n).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-const fmtPct = (n) =>
-  n == null || isNaN(n)
-    ? "—"
-    : Number(n).toLocaleString("pt-BR", {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      }) + "%";
-const fmtX = (n) =>
-  !n || isNaN(n) || n === 0 ? "—" : Number(n).toFixed(2) + "×";
+/* ─── FORMATTERS ─────────────────────────────────────────── */
+const fmt    = (n,d=0) => n==null||isNaN(n) ? "—" : Number(n).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtR   = (n) => !n||isNaN(n) ? "—" : "R$\u00a0"+Number(n).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtUSD = (n) => n==null||isNaN(n)||n===0 ? "—" : "$\u00a0"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtPct = (n) => n==null||isNaN(n) ? "—" : Number(n).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+"%";
+const fmtX   = (n) => !n||isNaN(n)||n===0 ? "—" : Number(n).toFixed(2)+"×";
+const fmtDate= (s) => { if(!s)return"—"; try{ const d=new Date(s+"T12:00:00"); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}); }catch{ return s; } };
 
-/* ── Parse Meta CSV (anúncio + país no mesmo arquivo) ── */
-function parseMeta(text) {
-  const { data } = Papa.parse(text, { header: true, skipEmptyLines: true });
-  const totals = {
-    reach: 0,
-    impressions: 0,
-    lpv: 0,
-    addCart: 0,
-    checkout: 0,
-    purchases: 0,
-    spend: 0,
-    clicks: 0,
-  };
-  const byCreative = {},
-    byCountry = {},
-    byCampaign = {},
-    byAdset = {};
+/* ─── PARSERS ────────────────────────────────────────────── */
+function parseMeta(text, dateFrom, dateTo) {
+  const { data } = Papa.parse(text, { header:true, skipEmptyLines:true });
+  const rows = data.filter(r => {
+    const d = getStr(r, COL.date).slice(0,10);
+    if (dateFrom && d !== "—" && d < dateFrom) return false;
+    if (dateTo   && d !== "—" && d > dateTo)   return false;
+    return true;
+  });
 
-  for (const r of data) {
-    const reach = getNum(r, COL.reach);
-    const impressions = getNum(r, COL.impressions);
-    const lpv = getNum(r, COL.lpv);
-    const addCart = getNum(r, COL.addCart);
-    const checkout = getNum(r, COL.checkout);
-    const purchases = getNum(r, COL.purchases);
-    const spend = getNum(r, COL.spend);
-    const clicks = getNum(r, COL.clicks);
-    const adName = getStr(r, COL.adName);
-    const campaign = getStr(r, COL.campaign);
-    const adset = getStr(r, COL.adset);
-    const country = getStr(r, COL.country);
+  const totals = { reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0 };
+  const byCreative={}, byCountry={}, byCampaign={}, byDay={};
 
-    totals.reach += reach;
-    totals.impressions += impressions;
-    totals.lpv += lpv;
-    totals.addCart += addCart;
-    totals.checkout += checkout;
-    totals.purchases += purchases;
-    totals.spend += spend;
-    totals.clicks += clicks;
+  for (const r of rows) {
+    const reach=getNum(r,COL.reach), impressions=getNum(r,COL.impressions);
+    const lpv=getNum(r,COL.lpv), addCart=getNum(r,COL.addCart);
+    const checkout=getNum(r,COL.checkout), purchases=getNum(r,COL.purchases);
+    const spend=getNum(r,COL.spend), clicks=getNum(r,COL.clicks);
+    const adName=getStr(r,COL.adName), campaign=getStr(r,COL.campaign);
+    const adset=getStr(r,COL.adset), country=getStr(r,COL.country);
+    const dateStr=getStr(r,COL.date).slice(0,10);
 
-    const add = (map, key, init) => {
-      if (!key || key === "—") return;
-      if (!map[key]) map[key] = init();
-      const m = map[key];
-      m.reach += reach;
-      m.impressions += impressions;
-      m.lpv += lpv;
-      m.addCart += addCart;
-      m.checkout += checkout;
-      m.purchases += purchases;
-      m.spend += spend;
+    totals.reach+=reach; totals.impressions+=impressions; totals.lpv+=lpv;
+    totals.addCart+=addCart; totals.checkout+=checkout;
+    totals.purchases+=purchases; totals.spend+=spend; totals.clicks+=clicks;
+
+    const add=(map,key,init)=>{
+      if(!key||key==="—")return;
+      if(!map[key])map[key]=init();
+      const m=map[key];
+      m.reach=(m.reach||0)+reach; m.impressions=(m.impressions||0)+impressions;
+      m.lpv=(m.lpv||0)+lpv; m.addCart=(m.addCart||0)+addCart;
+      m.checkout=(m.checkout||0)+checkout; m.purchases=(m.purchases||0)+purchases;
+      m.spend=(m.spend||0)+spend; m.clicks=(m.clicks||0)+clicks;
     };
-    add(byCreative, adName, () => ({
-      reach: 0,
-      impressions: 0,
-      lpv: 0,
-      addCart: 0,
-      checkout: 0,
-      purchases: 0,
-      spend: 0,
-      campaign,
-      adset,
-    }));
-    add(byCampaign, campaign, () => ({
-      reach: 0,
-      impressions: 0,
-      lpv: 0,
-      addCart: 0,
-      checkout: 0,
-      purchases: 0,
-      spend: 0,
-    }));
-    add(byAdset, adset, () => ({
-      reach: 0,
-      impressions: 0,
-      lpv: 0,
-      addCart: 0,
-      checkout: 0,
-      purchases: 0,
-      spend: 0,
-      campaign,
-    }));
+    add(byCreative, adName,   ()=>({campaign,adset,reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0}));
+    add(byCampaign, campaign, ()=>({reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0}));
 
-    // Country — aggregate all, filter by purchases later
-    if (country !== "—") {
-      if (!byCountry[country])
-        byCountry[country] = {
-          purchases: 0,
-          spend: 0,
-          impressions: 0,
-          lpv: 0,
-          addCart: 0,
-        };
-      byCountry[country].purchases += purchases;
-      byCountry[country].spend += spend;
-      byCountry[country].impressions += impressions;
-      byCountry[country].lpv += lpv;
-      byCountry[country].addCart += addCart;
+    if(country!=="—"){
+      if(!byCountry[country])byCountry[country]={purchases:0,spend:0,impressions:0,lpv:0,addCart:0};
+      byCountry[country].purchases+=purchases; byCountry[country].spend+=spend;
+      byCountry[country].impressions+=impressions; byCountry[country].lpv+=lpv;
+      byCountry[country].addCart+=addCart;
+    }
+    if(dateStr&&dateStr!=="—"){
+      if(!byDay[dateStr])byDay[dateStr]={spend:0,purchases:0,impressions:0,lpv:0};
+      byDay[dateStr].spend+=spend; byDay[dateStr].purchases+=purchases;
+      byDay[dateStr].impressions+=impressions; byDay[dateStr].lpv+=lpv;
     }
   }
-  totals.costLpv = totals.lpv > 0 ? totals.spend / totals.lpv : 0;
-  totals.cpa = totals.purchases > 0 ? totals.spend / totals.purchases : 0;
-  totals.cvr = totals.lpv > 0 ? (totals.purchases / totals.lpv) * 100 : 0;
-  return {
-    totals,
-    byCreative,
-    byCountry,
-    byCampaign,
-    byAdset,
-    rowCount: data.length,
-  };
+  totals.costLpv=totals.lpv>0?totals.spend/totals.lpv:0;
+  totals.cpa=totals.purchases>0?totals.spend/totals.purchases:0;
+  totals.cvr=totals.lpv>0?(totals.purchases/totals.lpv)*100:0;
+  return { totals, byCreative, byCountry, byCampaign, byDay, rowCount:rows.length };
 }
 
-function parseShopifyOrders(text) {
-  const { data } = Papa.parse(text, { header: true, skipEmptyLines: true });
-  let orders = 0,
-    revenue = 0;
-  const byCountry = {};
+function parseShopify(text, dateFrom, dateTo) {
+  const { data } = Papa.parse(text, { header:true, skipEmptyLines:true });
+  const orders={};
   for (const r of data) {
-    const name = r["Name"] || r["name"] || "";
-    if (!name) continue;
-    const amt =
-      parseFloat(String(r["Total"] || r["total"] || "0").replace(",", ".")) ||
-      0;
-    const country =
-      r["Shipping Country"] ||
-      r["Billing Country"] ||
-      r["shipping_country"] ||
-      "—";
-    orders++;
-    revenue += amt;
-    if (!byCountry[country]) byCountry[country] = { orders: 0, revenue: 0 };
-    byCountry[country].orders++;
-    byCountry[country].revenue += amt;
+    const name=r["Name"]||""; if(!name)continue;
+    const created=(r["Created at"]||"").slice(0,10);
+    if(dateFrom && created && created < dateFrom) continue;
+    if(dateTo   && created && created > dateTo)   continue;
+    if(!orders[name]){
+      orders[name]={
+        date:created,
+        country:r["Billing Country"]||r["Shipping Country"]||"—",
+        total:parseFloat(r["Total"]||"0")||0,
+        status:r["Financial Status"]||"",
+        items:[],
+      };
+    }
+    if(r["Lineitem name"])orders[name].items.push(r["Lineitem name"]);
   }
-  return { orders, revenue, byCountry };
-}
 
-function parsePinterest(text) {
-  const { data } = Papa.parse(text, { header: true, skipEmptyLines: true });
-  const totals = {
-    impressions: 0,
-    clicks: 0,
-    saves: 0,
-    spend: 0,
-    conversions: 0,
-  };
-  const byPin = {};
-  for (const r of data) {
-    const impr = getNum(r, ["impressions", "impressões"]);
-    const clicks = getNum(r, ["link clicks", "clicks", "cliques"]);
-    const saves = getNum(r, COL.saves);
-    const spend = getNum(r, COL.spend);
-    const conv = getNum(r, [
-      "checkouts",
-      "conversions",
-      "purchases",
-      "compras",
-    ]);
-    const pinName = getStr(r, [
-      "ad name",
-      "pin name",
-      "name",
-      "nome do anúncio",
-    ]);
-    totals.impressions += impr;
-    totals.clicks += clicks;
-    totals.saves += saves;
-    totals.spend += spend;
-    totals.conversions += conv;
-    if (pinName !== "—") {
-      if (!byPin[pinName])
-        byPin[pinName] = {
-          impressions: 0,
-          clicks: 0,
-          saves: 0,
-          spend: 0,
-          conversions: 0,
-        };
-      byPin[pinName].impressions += impr;
-      byPin[pinName].clicks += clicks;
-      byPin[pinName].saves += saves;
-      byPin[pinName].spend += spend;
-      byPin[pinName].conversions += conv;
+  let totalOrders=0,totalRevenue=0;
+  const byCountry={},byDay={},byProduct={};
+
+  for(const o of Object.values(orders)){
+    if(o.total===0)continue; // skip freebies
+    totalOrders++; totalRevenue+=o.total;
+    if(!byCountry[o.country])byCountry[o.country]={orders:0,revenue:0};
+    byCountry[o.country].orders++; byCountry[o.country].revenue+=o.total;
+    if(o.date){
+      if(!byDay[o.date])byDay[o.date]={orders:0,revenue:0};
+      byDay[o.date].orders++; byDay[o.date].revenue+=o.total;
+    }
+    for(const item of o.items){
+      if(!byProduct[item])byProduct[item]={orders:0};
+      byProduct[item].orders++;
     }
   }
-  totals.ctr =
-    totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
-  totals.cpa = totals.conversions > 0 ? totals.spend / totals.conversions : 0;
-  return { totals, byPin, rowCount: data.length };
+  return { totalOrders, totalRevenue, byCountry, byDay, byProduct,
+    avgTicket:totalOrders>0?totalRevenue/totalOrders:0 };
 }
 
-/* ── Shared UI ── */
-function UploadZone({ label, sub, onFile, loaded, color }) {
-  const [drag, setDrag] = useState(false);
-  const onDrop = useCallback(
-    (e) => {
-      e.preventDefault();
-      setDrag(false);
-      const f = e.dataTransfer.files[0];
-      if (f) onFile(f);
-    },
-    [onFile]
-  );
-  return (
-    <label
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDrag(true);
-      }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={onDrop}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        border: `1.5px dashed ${loaded ? color : drag ? "#888" : "#d6cfc5"}`,
-        borderRadius: 10,
-        padding: "20px 16px",
-        cursor: "pointer",
-        textAlign: "center",
-        gap: 6,
-        background: loaded ? `${color}0a` : drag ? "#eee8e0" : "#faf8f5",
-        transition: "all 0.2s",
-      }}
-    >
-      <input
-        type="file"
-        accept=".csv"
-        style={{ display: "none" }}
-        onChange={(e) => onFile(e.target.files[0])}
-      />
-      <div style={{ fontSize: 18 }}>{loaded ? "✓" : "↑"}</div>
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: loaded ? color : "#4a3f35",
-          fontFamily: "'Syne',sans-serif",
-          letterSpacing: "0.04em",
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: 10, color: "#9a8f84" }}>
-        {loaded ? "Carregado · clique pra trocar" : sub}
-      </div>
+function parsePinterest(text){
+  const{data}=Papa.parse(text,{header:true,skipEmptyLines:true});
+  const totals={impressions:0,clicks:0,saves:0,spend:0,conversions:0};
+  const byPin={};
+  for(const r of data){
+    const impr=getNum(r,["impressions","impressões"]);
+    const clicks=getNum(r,["link clicks","clicks","cliques"]);
+    const saves=getNum(r,COL.saves);
+    const spend=getNum(r,COL.spend);
+    const conv=getNum(r,["checkouts","conversions","purchases","compras"]);
+    const name=getStr(r,["ad name","pin name","nome do anúncio","name"]);
+    totals.impressions+=impr;totals.clicks+=clicks;totals.saves+=saves;
+    totals.spend+=spend;totals.conversions+=conv;
+    if(name!=="—"){
+      if(!byPin[name])byPin[name]={impressions:0,clicks:0,saves:0,spend:0,conversions:0};
+      byPin[name].impressions+=impr;byPin[name].clicks+=clicks;
+      byPin[name].saves+=saves;byPin[name].spend+=spend;byPin[name].conversions+=conv;
+    }
+  }
+  totals.ctr=totals.impressions>0?(totals.clicks/totals.impressions)*100:0;
+  totals.cpa=totals.conversions>0?totals.spend/totals.conversions:0;
+  return{totals,byPin};
+}
+
+/* ─── DAILY CHART DATA ───────────────────────────────────── */
+function buildDailyData(metaByDay, shopifyByDay, rate){
+  const all=new Set([...Object.keys(metaByDay||{}),...Object.keys(shopifyByDay||{})]);
+  return Array.from(all).sort().map(d=>{
+    const m=metaByDay?.[d]||{};
+    const s=shopifyByDay?.[d]||{};
+    const spend=m.spend||0;
+    const revBRL=(s.revenue||0)*rate;
+    const roas=spend>0?parseFloat((revBRL/spend).toFixed(2)):null;
+    return{
+      date:d, label:fmtDate(d),
+      spend:spend?parseFloat(spend.toFixed(2)):null,
+      revBRL:revBRL?parseFloat(revBRL.toFixed(2)):null,
+      roas, orders:s.orders||0, purchases:m.purchases||0,
+    };
+  });
+}
+
+/* ─── SUGGESTIONS ────────────────────────────────────────── */
+function buildSuggestions(meta, shopify, rate){
+  const out=[];
+  if(!meta)return out;
+  const t=meta.totals;
+  const roasG=t.spend>0&&shopify?(shopify.totalRevenue*rate)/t.spend:0;
+
+  if(roasG>0){
+    if(roasG>=3)      out.push({type:"good",  title:`ROAS Global ${fmtX(roasG)} — campanha saudável`,    msg:"Budget pode ser escalado gradualmente (+20-30%/semana)."});
+    else if(roasG>=1) out.push({type:"warn",  title:`ROAS Global ${fmtX(roasG)} — positivo mas apertado`,msg:"Margem pequena. Foco em melhorar CVR ou aumentar ticket."});
+    else              out.push({type:"bad",   title:`ROAS Global ${fmtX(roasG)} — abaixo do breakeven`,  msg:`Receita ${fmtR(shopify.totalRevenue*rate)} vs gasto ${fmtR(t.spend)}.`});
+  }
+
+  const creatives=Object.entries(meta.byCreative)
+    .map(([n,d])=>({name:n,...d,cpa:d.purchases>0?d.spend/d.purchases:9999}))
+    .filter(c=>c.spend>5);
+  if(creatives.length>1){
+    const best=[...creatives].sort((a,b)=>a.cpa-b.cpa)[0];
+    const worst=[...creatives].sort((a,b)=>b.cpa-a.cpa)[0];
+    if(best.purchases>0)
+      out.push({type:"good",  title:`Melhor criativo: ${best.name.slice(0,50)}…`, msg:`CPA ${fmtR(best.cpa)} · ${fmt(best.purchases)} compras. Teste variações desse criativo.`});
+    if(worst.cpa>best.cpa*2&&worst.purchases===0)
+      out.push({type:"action",title:`Pausar: ${worst.name.slice(0,50)}…`,        msg:`R$${worst.spend.toFixed(0)} gastos sem compras. Realoque para o criativo vencedor.`});
+  }
+
+  const countries=Object.entries(meta.byCountry)
+    .filter(([,d])=>d.spend>3)
+    .map(([c,d])=>({
+      c, ...d,
+      sOrders:shopify?.byCountry[c]?.orders||0,
+      sRev:shopify?.byCountry[c]?.revenue||0,
+      roas:d.spend>0&&shopify?.byCountry[c]?.revenue?(shopify.byCountry[c].revenue*rate)/d.spend:0,
+    }));
+  const bestC=countries.filter(x=>x.roas>0).sort((a,b)=>b.roas-a.roas)[0];
+  const worstC=countries.filter(x=>x.roas===0&&x.spend>15).sort((a,b)=>b.spend-a.spend)[0];
+  if(bestC?.roas>2)
+    out.push({type:"action",title:`Escalar orçamento em ${bestC.c}`,msg:`ROAS ${fmtX(bestC.roas)} · ${bestC.sOrders} pedidos Shopify · gasto ${fmtR(bestC.spend)}. País mais rentável.`});
+  if(worstC)
+    out.push({type:"warn",  title:`Revisar ${worstC.c}`,msg:`${fmtR(worstC.spend)} gastos sem pedidos Shopify. Pode ser delay de atribuição ou público errado.`});
+
+  if(t.checkout>0&&t.purchases>0){
+    const cvr=(t.purchases/t.checkout)*100;
+    if(cvr<40)
+      out.push({type:"warn",title:`Checkout com ${fmtPct(100-cvr)} de abandono`,msg:`Apenas ${fmtPct(cvr)} dos checkouts viram compra. Revisar friction no fluxo de pagamento.`});
+  }
+  return out;
+}
+
+/* ─── UI ATOMS ───────────────────────────────────────────── */
+function UploadZone({label,sub,onFile,loaded,color}){
+  const[drag,setDrag]=useState(false);
+  const onDrop=useCallback(e=>{e.preventDefault();setDrag(false);const f=e.dataTransfer.files[0];if(f)onFile(f);},[onFile]);
+  return(
+    <label onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={onDrop}
+      style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+        border:`1.5px dashed ${loaded?color:drag?"#888":"#d6cfc5"}`,borderRadius:10,
+        padding:"16px 14px",cursor:"pointer",textAlign:"center",gap:5,
+        background:loaded?`${color}0d`:drag?"#ede8e0":"#faf8f5",transition:"all 0.2s",minHeight:88}}>
+      <input type="file" accept=".csv" style={{display:"none"}} onChange={e=>onFile(e.target.files[0])}/>
+      <div style={{fontSize:15,opacity:loaded?1:0.45}}>{loaded?"✓":"↑"}</div>
+      <div style={{fontSize:11,fontWeight:700,color:loaded?color:"#4a3f35",fontFamily:"'Syne',sans-serif",letterSpacing:"0.04em"}}>{label}</div>
+      <div style={{fontSize:10,color:"#9a8f84"}}>{loaded?"Carregado · clique pra trocar":sub}</div>
     </label>
   );
 }
 
-function KPI({ label, value, sub, accent }) {
-  return (
-    <div
-      style={{
-        background: T.card,
-        border: `1px solid ${T.border}`,
-        borderRadius: 10,
-        padding: "14px 16px",
-        borderTop: `3px solid ${accent || T.border}`,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 9,
-          color: T.muted,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          marginBottom: 5,
-          fontFamily: "'Syne',sans-serif",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color: T.text,
-          fontFamily: "'Syne',sans-serif",
-          letterSpacing: "-0.02em",
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-      {sub && (
-        <div style={{ fontSize: 10, color: T.faint, marginTop: 4 }}>{sub}</div>
-      )}
+function KPI({label,value,sub,accent,large}){
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:"13px 15px",borderTop:`3px solid ${accent||T.border}`}}>
+      <div style={{fontSize:9,color:T.muted,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:5,fontFamily:"'Syne',sans-serif"}}>{label}</div>
+      <div style={{fontSize:large?26:18,fontWeight:700,color:T.text,fontFamily:"'Syne',sans-serif",letterSpacing:"-0.02em",lineHeight:1}}>{value}</div>
+      {sub&&<div style={{fontSize:10,color:T.faint,marginTop:4}}>{sub}</div>}
     </div>
   );
 }
 
-function SectionTitle({ children, color }) {
-  return (
-    <div
-      style={{
-        fontSize: 10,
-        fontWeight: 700,
-        color: color || T.muted,
-        letterSpacing: "0.16em",
-        textTransform: "uppercase",
-        marginBottom: 14,
-        fontFamily: "'Syne',sans-serif",
-        borderLeft: `3px solid ${color || T.border}`,
-        paddingLeft: 10,
-      }}
-    >
-      {children}
-    </div>
+function SectionTitle({children,color,mb=12}){
+  return(
+    <div style={{fontSize:9,fontWeight:700,color:color||T.muted,letterSpacing:"0.16em",
+      textTransform:"uppercase",marginBottom:mb,fontFamily:"'Syne',sans-serif",
+      borderLeft:`3px solid ${color||T.border}`,paddingLeft:8}}>{children}</div>
   );
 }
 
-function useSortable(data, def, dir = "desc") {
-  const [sort, setSort] = useState({ key: def, dir });
-  const sorted = useMemo(() => {
-    if (!data) return [];
-    return [...data].sort((a, b) => {
-      const av = a[sort.key] ?? 0,
-        bv = b[sort.key] ?? 0;
-      return sort.dir === "desc" ? bv - av : av - bv;
-    });
-  }, [data, sort.key, sort.dir]);
-  const onSort = (k) =>
-    setSort((s) => ({
-      key: k,
-      dir: s.key === k && s.dir === "desc" ? "asc" : "desc",
-    }));
-  return { sorted, sort, onSort };
+function useSortable(data,def,dir="desc"){
+  const[sort,setSort]=useState({key:def,dir});
+  const sorted=useMemo(()=>{
+    if(!data?.length)return[];
+    return[...data].sort((a,b)=>{const av=a[sort.key]??0,bv=b[sort.key]??0;return sort.dir==="desc"?bv-av:av-bv;});
+  },[data,sort.key,sort.dir]);
+  return{sorted,sort,onSort:k=>setSort(s=>({key:k,dir:s.key===k&&s.dir==="desc"?"asc":"desc"}))};
 }
 
-function DataTable({ cols, rows, sort, onSort, emptyMsg }) {
-  const th = {
-    padding: "8px 12px",
-    fontSize: 9,
-    color: T.muted,
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    borderBottom: `1px solid ${T.border}`,
-    textAlign: "right",
-    userSelect: "none",
-    background: T.bg,
-    fontFamily: "'Syne',sans-serif",
-  };
-  const td = {
-    padding: "9px 12px",
-    fontSize: 12,
-    color: "#4a3f35",
-    borderBottom: `1px solid #f0ebe4`,
-    textAlign: "right",
-    fontVariantNumeric: "tabular-nums",
-  };
-  if (!rows.length)
-    return (
-      <div
-        style={{
-          padding: "32px 0",
-          textAlign: "center",
-          color: T.faint,
-          fontSize: 13,
-        }}
-      >
-        {emptyMsg || "Sem dados"}
-      </div>
-    );
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            {cols.map((c) => (
-              <th
-                key={c.key}
-                style={{ ...th, textAlign: c.align || "right" }}
-                onClick={() => onSort(c.key)}
-              >
-                {c.label}
-                {sort.key === c.key ? (sort.dir === "desc" ? " ↓" : " ↑") : ""}
-              </th>
+function DataTable({cols,rows,sort,onSort,emptyMsg}){
+  const TH={padding:"7px 10px",fontSize:9,color:T.muted,letterSpacing:"0.12em",
+    textTransform:"uppercase",cursor:"pointer",whiteSpace:"nowrap",
+    borderBottom:`1px solid ${T.border}`,textAlign:"right",userSelect:"none",
+    background:T.bg,fontFamily:"'Syne',sans-serif"};
+  const TD={padding:"8px 10px",fontSize:11,color:"#4a3f35",
+    borderBottom:`1px solid #f0ebe4`,textAlign:"right",fontVariantNumeric:"tabular-nums"};
+  if(!rows?.length)return<div style={{padding:"28px",textAlign:"center",color:T.faint,fontSize:12}}>{emptyMsg||"Sem dados"}</div>;
+  return(
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr>{cols.map(c=>(
+          <th key={c.key} style={{...TH,textAlign:c.align||"right"}} onClick={()=>onSort(c.key)}>
+            {c.label}{sort?.key===c.key?(sort.dir==="desc"?" ↓":" ↑"):""}
+          </th>
+        ))}</tr></thead>
+        <tbody>{rows.map((row,i)=>(
+          <tr key={i} style={{background:i%2===0?"#fffcf9":T.card}}>
+            {cols.map(c=>(
+              <td key={c.key} style={{...TD,textAlign:c.align||"right",
+                color:c.color?c.color(row[c.key],row):"#4a3f35"}}>
+                {c.render?c.render(row[c.key],row):row[c.key]??"—"}
+              </td>
             ))}
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr
-              key={i}
-              style={{ background: i % 2 === 0 ? "#fffcf9" : T.card }}
-            >
-              {cols.map((c) => (
-                <td
-                  key={c.key}
-                  style={{
-                    ...td,
-                    textAlign: c.align || "right",
-                    color: c.color ? c.color(row[c.key], row) : td.color,
-                  }}
-                >
-                  {c.render ? c.render(row[c.key], row) : row[c.key] ?? "—"}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
+        ))}</tbody>
       </table>
     </div>
   );
 }
 
-function EmptyState({ icon, msg, sub }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 10,
-        padding: "40px 20px",
-        color: T.faint,
-      }}
-    >
-      <div style={{ fontSize: 36, opacity: 0.4 }}>{icon || "◎"}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: T.muted }}>{msg}</div>
-      {sub && (
-        <div
-          style={{
-            fontSize: 12,
-            textAlign: "center",
-            maxWidth: 340,
-            lineHeight: 1.6,
-          }}
-        >
-          {sub}
-        </div>
-      )}
+function FunnelBar({label,value,max,color}){
+  const pct=max>0?Math.min((value/max)*100,100):0;
+  return(
+    <div style={{marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+        <span style={{color:T.muted,fontSize:10}}>{label}</span>
+        <span style={{fontWeight:600,color:T.text,fontVariantNumeric:"tabular-nums"}}>{fmt(value)}</span>
+      </div>
+      <div style={{height:5,background:"#ede8e0",borderRadius:3,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:3,transition:"width 0.4s ease"}}/>
+      </div>
     </div>
   );
 }
 
-/* ── META TAB ── */
-function MetaTab({ meta, onMetaFile }) {
-  const [subTab, setSubTab] = useState("overview");
+function PeriodSelector({dateFrom,dateTo,onFrom,onTo}){
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:8,background:T.card,
+      border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px"}}>
+      <span style={{fontSize:10,color:T.muted,fontFamily:"'Syne',sans-serif",
+        letterSpacing:"0.1em",textTransform:"uppercase",whiteSpace:"nowrap"}}>Período</span>
+      <input type="date" value={dateFrom} onChange={e=>onFrom(e.target.value)}
+        style={{border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 7px",fontSize:11,color:T.text,background:T.bg}}/>
+      <span style={{color:T.faint}}>→</span>
+      <input type="date" value={dateTo} onChange={e=>onTo(e.target.value)}
+        style={{border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 7px",fontSize:11,color:T.text,background:T.bg}}/>
+      <button onClick={()=>{onFrom("");onTo("");}}
+        style={{fontSize:10,color:T.muted,background:"none",border:"none",cursor:"pointer",padding:"2px 6px",
+          borderRadius:4,transition:"background 0.15s"}}>limpar</button>
+    </div>
+  );
+}
 
-  const creativeRows = useMemo(() => {
-    if (!meta) return [];
-    return Object.entries(meta.byCreative).map(([name, d]) => ({
-      name,
-      adset: d.adset,
-      impressions: d.impressions,
-      lpv: d.lpv,
-      addCart: d.addCart,
-      checkout: d.checkout,
-      purchases: d.purchases,
-      spend: d.spend,
-      cpa: d.purchases > 0 ? d.spend / d.purchases : 0,
-      cvr: d.lpv > 0 ? (d.purchases / d.lpv) * 100 : 0,
-      cartRate: d.lpv > 0 ? (d.addCart / d.lpv) * 100 : 0,
-    }));
-  }, [meta]);
-
-  // Countries — only with purchases
-  const countryRows = useMemo(() => {
-    if (!meta) return [];
-    return Object.entries(meta.byCountry)
-      .filter(([, d]) => d.purchases > 0)
-      .map(([country, d]) => ({
-        country,
-        purchases: d.purchases,
-        spend: d.spend,
-        lpv: d.lpv,
-        addCart: d.addCart,
-        cpa: d.purchases > 0 ? d.spend / d.purchases : 0,
-      }));
-  }, [meta]);
-
-  const campaignRows = useMemo(() => {
-    if (!meta) return [];
-    return Object.entries(meta.byCampaign).map(([name, d]) => ({
-      name,
-      impressions: d.impressions,
-      lpv: d.lpv,
-      addCart: d.addCart,
-      checkout: d.checkout,
-      purchases: d.purchases,
-      spend: d.spend,
-      cpa: d.purchases > 0 ? d.spend / d.purchases : 0,
-    }));
-  }, [meta]);
-
-  const {
-    sorted: sC,
-    sort: sortC,
-    onSort: oSC,
-  } = useSortable(creativeRows, "purchases");
-  const {
-    sorted: sCo,
-    sort: sortCo,
-    onSort: oSCo,
-  } = useSortable(countryRows, "purchases");
-  const {
-    sorted: sCa,
-    sort: sortCa,
-    onSort: oSCa,
-  } = useSortable(campaignRows, "spend");
-
-  const SUB = ["overview", "funil", "criativos", "países", "campanhas"];
-
-  const roasColor = (v) => (v >= 3 ? T.good : v >= 1 ? T.warn : T.bad);
-
-  return (
-    <div>
-      {/* Upload */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-          marginBottom: 24,
-        }}
-      >
-        <UploadZone
-          label="Meta Ads CSV"
-          sub="Aba Anúncios → Detalhamento → País → Exportar CSV"
-          onFile={onMetaFile}
-          loaded={!!meta}
-          color={T.meta}
-        />
-        <div
-          style={{
-            background: T.metaLight,
-            borderRadius: 10,
-            padding: "14px 18px",
-            fontSize: 11,
-            color: "#1e40af",
-            lineHeight: 1.8,
-          }}
-        >
-          <strong
-            style={{
-              display: "block",
-              marginBottom: 6,
-              fontSize: 10,
-              letterSpacing: "0.1em",
-              fontFamily: "'Syne',sans-serif",
-            }}
-          >
-            COMO EXPORTAR
-          </strong>
-          1. Aba <b>Anúncios</b> (não Conjuntos)
-          <br />
-          2. Selecione o período completo
-          <br />
-          3. <b>Detalhamento → País</b>
-          <br />
-          4. Exportar → CSV
-          <br />
-          <span style={{ color: "#3b82f6", fontSize: 10 }}>
-            Um arquivo só com tudo — criativo + país + métricas
+/* ─── DAILY CHART ────────────────────────────────────────── */
+const ChartTip=({active,payload,label})=>{
+  if(!active||!payload?.length)return null;
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,
+      padding:"10px 14px",fontSize:11,boxShadow:"0 4px 14px rgba(0,0,0,0.08)"}}>
+      <div style={{fontWeight:700,marginBottom:5,fontFamily:"'Syne',sans-serif"}}>{label}</div>
+      {payload.map(p=>(
+        <div key={p.name} style={{display:"flex",justifyContent:"space-between",gap:16,color:p.color,marginBottom:2}}>
+          <span>{p.name}</span>
+          <span style={{fontWeight:600}}>
+            {p.name==="ROAS"?fmtX(p.value):p.name.includes("R$")?fmtR(p.value):p.name.includes("$")?fmtUSD(p.value):fmt(p.value)}
           </span>
         </div>
-      </div>
-
-      {!meta && (
-        <EmptyState
-          icon="ƒ"
-          msg="Faça upload do CSV do Meta Ads"
-          sub="Exportar da aba Anúncios com Detalhamento → País ativado"
-        />
-      )}
-
-      {meta && (
-        <>
-          {/* Sub tabs */}
-          <div
-            style={{
-              display: "flex",
-              gap: 2,
-              marginBottom: 24,
-              background: T.bg,
-              borderRadius: 8,
-              padding: 4,
-              border: `1px solid ${T.border}`,
-              width: "fit-content",
-            }}
-          >
-            {SUB.map((s) => (
-              <button
-                key={s}
-                onClick={() => setSubTab(s)}
-                style={{
-                  background: subTab === s ? T.card : "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "6px 14px",
-                  fontSize: 11,
-                  fontWeight: subTab === s ? 700 : 500,
-                  color: subTab === s ? T.meta : T.muted,
-                  borderRadius: 6,
-                  transition: "all 0.15s",
-                  fontFamily: "'Syne',sans-serif",
-                  letterSpacing: "0.06em",
-                  boxShadow:
-                    subTab === s ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                }}
-              >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          {subTab === "overview" && (
-            <>
-              <SectionTitle color={T.meta}>Investimento & Alcance</SectionTitle>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(145px,1fr))",
-                  gap: 10,
-                  marginBottom: 22,
-                }}
-              >
-                <KPI
-                  label="Valor Gasto"
-                  value={fmtR(meta.totals.spend)}
-                  accent={T.meta}
-                />
-                <KPI
-                  label="Impressões"
-                  value={fmt(meta.totals.impressions)}
-                  accent={T.meta}
-                />
-                <KPI
-                  label="Alcance"
-                  value={fmt(meta.totals.reach)}
-                  accent={T.meta}
-                />
-              </div>
-              <SectionTitle color={T.meta}>Funil</SectionTitle>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(145px,1fr))",
-                  gap: 10,
-                  marginBottom: 22,
-                }}
-              >
-                <KPI
-                  label="Vis. Pág. Destino"
-                  value={fmt(meta.totals.lpv)}
-                  accent="#7c3aed"
-                />
-                <KPI
-                  label="Custo / LPV"
-                  value={fmtR(meta.totals.costLpv)}
-                  accent="#7c3aed"
-                />
-                <KPI
-                  label="Add Carrinho"
-                  value={fmt(meta.totals.addCart)}
-                  accent={T.warn}
-                />
-                <KPI
-                  label="Checkouts"
-                  value={fmt(meta.totals.checkout)}
-                  accent={T.warn}
-                />
-                <KPI
-                  label="Compras Meta"
-                  value={fmt(meta.totals.purchases)}
-                  accent={T.good}
-                />
-                <KPI
-                  label="CPA Médio"
-                  value={fmtR(meta.totals.cpa)}
-                  accent={T.good}
-                />
-                <KPI
-                  label="CVR (LPV→Compra)"
-                  value={fmtPct(meta.totals.cvr)}
-                  accent={T.shopify}
-                />
-              </div>
-            </>
-          )}
-
-          {subTab === "funil" && (
-            <div
-              style={{
-                maxWidth: 480,
-                background: T.card,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: 24,
-              }}
-            >
-              <SectionTitle color={T.meta}>
-                Funil Completo — período selecionado
-              </SectionTitle>
-              {[
-                {
-                  l: "Impressões",
-                  v: meta.totals.impressions,
-                  color: "#93c5fd",
-                },
-                {
-                  l: "Vis. Pág. Destino",
-                  v: meta.totals.lpv,
-                  color: "#7c3aed",
-                },
-                { l: "Add Carrinho", v: meta.totals.addCart, color: T.warn },
-                {
-                  l: "Checkout Iniciado",
-                  v: meta.totals.checkout,
-                  color: "#f97316",
-                },
-                { l: "Compras", v: meta.totals.purchases, color: T.good },
-              ].map((s, i, arr) => {
-                const prev = arr[i - 1]?.v;
-                const pct = prev && prev > 0 ? (s.v / prev) * 100 : null;
-                return (
-                  <div
-                    key={s.l}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      padding: "10px 0",
-                      borderBottom: `1px solid ${T.border}`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 4,
-                        height: 32,
-                        background: s.color,
-                        borderRadius: 2,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: T.muted,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {s.l}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 18,
-                          fontWeight: 700,
-                          color: T.text,
-                          fontFamily: "'Syne',sans-serif",
-                        }}
-                      >
-                        {fmt(s.v)}
-                      </div>
-                    </div>
-                    {pct != null && (
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: pct > 30 ? T.good : pct > 10 ? T.warn : T.bad,
-                          background:
-                            pct > 30
-                              ? T.shopifyLight
-                              : pct > 10
-                              ? T.warnLight
-                              : "#fee2e2",
-                          padding: "2px 8px",
-                          borderRadius: 20,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {fmtPct(pct)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <div
-                style={{
-                  marginTop: 16,
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                {[
-                  {
-                    l: "Imp → LPV",
-                    v:
-                      meta.totals.impressions > 0
-                        ? fmtPct(
-                            (meta.totals.lpv / meta.totals.impressions) * 100
-                          )
-                        : "—",
-                  },
-                  {
-                    l: "LPV → Cart",
-                    v:
-                      meta.totals.lpv > 0
-                        ? fmtPct((meta.totals.addCart / meta.totals.lpv) * 100)
-                        : "—",
-                  },
-                  {
-                    l: "LPV → Compra",
-                    v:
-                      meta.totals.lpv > 0
-                        ? fmtPct(
-                            (meta.totals.purchases / meta.totals.lpv) * 100
-                          )
-                        : "—",
-                  },
-                ].map((r) => (
-                  <div key={r.l} style={{ textAlign: "center" }}>
-                    <div
-                      style={{
-                        fontSize: 9,
-                        color: T.faint,
-                        letterSpacing: "0.1em",
-                        marginBottom: 4,
-                      }}
-                    >
-                      {r.l}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 20,
-                        fontWeight: 700,
-                        color: T.meta,
-                        fontFamily: "'Syne',sans-serif",
-                      }}
-                    >
-                      {r.v}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {subTab === "criativos" && (
-            <div
-              style={{
-                background: T.card,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  padding: "14px 18px",
-                  borderBottom: `1px solid ${T.border}`,
-                  fontSize: 11,
-                  color: T.muted,
-                  fontFamily: "'Syne',sans-serif",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                {sC.length} CRIATIVOS · clique na coluna para ordenar
-              </div>
-              <DataTable
-                sort={sortC}
-                onSort={oSC}
-                cols={[
-                  {
-                    key: "name",
-                    label: "Criativo",
-                    align: "left",
-                    render: (v) => (
-                      <span
-                        style={{
-                          maxWidth: 220,
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          fontSize: 12,
-                          color: T.text,
-                          fontWeight: 500,
-                        }}
-                      >
-                        {v}
-                      </span>
-                    ),
-                  },
-                  { key: "impressions", label: "Impr.", render: (v) => fmt(v) },
-                  { key: "lpv", label: "LPV", render: (v) => fmt(v) },
-                  { key: "addCart", label: "Add Cart", render: (v) => fmt(v) },
-                  {
-                    key: "cartRate",
-                    label: "Cart Rate",
-                    render: (v) => fmtPct(v),
-                    color: (v) => (v > 10 ? T.good : v > 3 ? T.warn : T.faint),
-                  },
-                  { key: "checkout", label: "Checkout", render: (v) => fmt(v) },
-                  {
-                    key: "purchases",
-                    label: "Compras",
-                    render: (v) => fmt(v),
-                    color: (v) => (v > 0 ? T.good : T.faint),
-                  },
-                  { key: "spend", label: "Gasto", render: (v) => fmtR(v) },
-                  { key: "cpa", label: "CPA", render: (v) => fmtR(v) },
-                  { key: "cvr", label: "CVR", render: (v) => fmtPct(v) },
-                ]}
-                rows={sC}
-              />
-            </div>
-          )}
-
-          {subTab === "países" && (
-            <div
-              style={{
-                background: T.card,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  padding: "14px 18px",
-                  borderBottom: `1px solid ${T.border}`,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: T.muted,
-                    fontFamily: "'Syne',sans-serif",
-                    letterSpacing: "0.08em",
-                    marginBottom: 4,
-                  }}
-                >
-                  PAÍSES COM CONVERSÃO · {sCo.length} países
-                </div>
-                <div style={{ fontSize: 11, color: T.warn }}>
-                  Só aparecem países que tiveram ao menos 1 compra
-                </div>
-              </div>
-              {sCo.length === 0 ? (
-                <EmptyState
-                  icon="🌍"
-                  msg="Nenhuma compra registrada ainda"
-                  sub="Países aparecem aqui assim que houver conversão no período exportado"
-                />
-              ) : (
-                <DataTable
-                  sort={sortCo}
-                  onSort={oSCo}
-                  cols={[
-                    {
-                      key: "country",
-                      label: "País",
-                      align: "left",
-                      render: (v) => (
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            color: T.text,
-                            fontSize: 14,
-                          }}
-                        >
-                          {v}
-                        </span>
-                      ),
-                    },
-                    {
-                      key: "impressions",
-                      label: "Impr.",
-                      render: (v) => fmt(v),
-                    },
-                    { key: "lpv", label: "LPV", render: (v) => fmt(v) },
-                    {
-                      key: "addCart",
-                      label: "Add Cart",
-                      render: (v) => fmt(v),
-                    },
-                    {
-                      key: "purchases",
-                      label: "Compras",
-                      render: (v) => fmt(v),
-                      color: (v) => (v > 0 ? T.good : T.faint),
-                    },
-                    {
-                      key: "spend",
-                      label: "Gasto Meta",
-                      render: (v) => fmtR(v),
-                    },
-                    { key: "cpa", label: "CPA", render: (v) => fmtR(v) },
-                  ]}
-                  rows={sCo}
-                />
-              )}
-            </div>
-          )}
-
-          {subTab === "campanhas" && (
-            <div
-              style={{
-                background: T.card,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  padding: "14px 18px",
-                  borderBottom: `1px solid ${T.border}`,
-                  fontSize: 11,
-                  color: T.muted,
-                  fontFamily: "'Syne',sans-serif",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                {sCa.length} CAMPANHAS
-              </div>
-              <DataTable
-                sort={sortCa}
-                onSort={oSCa}
-                cols={[
-                  {
-                    key: "name",
-                    label: "Campanha",
-                    align: "left",
-                    render: (v) => (
-                      <span
-                        style={{
-                          maxWidth: 260,
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          fontWeight: 500,
-                          color: T.text,
-                        }}
-                      >
-                        {v}
-                      </span>
-                    ),
-                  },
-                  { key: "impressions", label: "Impr.", render: (v) => fmt(v) },
-                  { key: "lpv", label: "LPV", render: (v) => fmt(v) },
-                  { key: "addCart", label: "Add Cart", render: (v) => fmt(v) },
-                  {
-                    key: "purchases",
-                    label: "Compras",
-                    render: (v) => fmt(v),
-                    color: (v) => (v > 0 ? T.good : T.faint),
-                  },
-                  { key: "spend", label: "Gasto", render: (v) => fmtR(v) },
-                  { key: "cpa", label: "CPA", render: (v) => fmtR(v) },
-                ]}
-                rows={sCa}
-              />
-            </div>
-          )}
-        </>
-      )}
+      ))}
     </div>
   );
-}
-
-/* ── SHOPIFY TAB ── */
-function ShopifyTab({ shopifyOrders, onOrdersFile }) {
-  const o = shopifyOrders;
-  const countryRows = useMemo(() => {
-    if (!o) return [];
-    return Object.entries(o.byCountry).map(([c, d]) => ({
-      country: c,
-      orders: d.orders,
-      revenue: d.revenue,
-      avgTicket: d.orders > 0 ? d.revenue / d.orders : 0,
-    }));
-  }, [o]);
-  const { sorted, sort, onSort } = useSortable(countryRows, "revenue");
-
-  return (
-    <div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-          marginBottom: 24,
-        }}
-      >
-        <UploadZone
-          label="Shopify — Pedidos CSV"
-          sub="Admin → Pedidos → Exportar → Todos os pedidos"
-          onFile={onOrdersFile}
-          loaded={!!o}
-          color={T.shopify}
-        />
-        <div
-          style={{
-            background: T.shopifyLight,
-            borderRadius: 10,
-            padding: "14px 18px",
-            fontSize: 11,
-            color: "#065f46",
-            lineHeight: 1.8,
-          }}
-        >
-          <strong
-            style={{
-              display: "block",
-              marginBottom: 6,
-              fontSize: 10,
-              letterSpacing: "0.1em",
-              fontFamily: "'Syne',sans-serif",
-            }}
-          >
-            COMO EXPORTAR
-          </strong>
-          Admin → <b>Pedidos</b> → selecione o período
-          <br />→ <b>Exportar</b> → Pedidos atuais → CSV
-          <br />
-          <span style={{ color: T.shopify, fontSize: 10 }}>
-            Inclui país de entrega, valor total, data
-          </span>
-        </div>
-      </div>
-      {!o && <EmptyState icon="🛍" msg="Faça upload dos pedidos do Shopify" />}
-      {o && (
-        <>
-          <SectionTitle color={T.shopify}>Resumo Shopify</SectionTitle>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill,minmax(145px,1fr))",
-              gap: 10,
-              marginBottom: 22,
-            }}
-          >
-            <KPI
-              label="Total de Pedidos"
-              value={fmt(o.orders)}
-              accent={T.shopify}
-            />
-            <KPI
-              label="Receita Total"
-              value={fmtD(o.revenue, "$")}
-              accent={T.shopify}
-            />
-            <KPI
-              label="Ticket Médio"
-              value={o.orders > 0 ? fmtD(o.revenue / o.orders, "$") : "—"}
-              accent={T.shopify}
-            />
-          </div>
-          {sorted.length > 0 && (
-            <>
-              <SectionTitle color={T.shopify}>Pedidos por País</SectionTitle>
-              <div
-                style={{
-                  background: T.card,
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 12,
-                  overflow: "hidden",
-                }}
-              >
-                <DataTable
-                  sort={sort}
-                  onSort={onSort}
-                  cols={[
-                    {
-                      key: "country",
-                      label: "País",
-                      align: "left",
-                      render: (v) => (
-                        <span style={{ fontWeight: 700, color: T.text }}>
-                          {v}
-                        </span>
-                      ),
-                    },
-                    {
-                      key: "orders",
-                      label: "Pedidos",
-                      render: (v) => fmt(v),
-                      color: (v) => (v > 0 ? T.shopify : T.faint),
-                    },
-                    {
-                      key: "revenue",
-                      label: "Receita (USD)",
-                      render: (v) => fmtD(v, "$"),
-                      color: (v) => (v > 0 ? T.good : T.faint),
-                    },
-                    {
-                      key: "avgTicket",
-                      label: "Ticket Médio",
-                      render: (v) => fmtD(v, "$"),
-                    },
-                  ]}
-                  rows={sorted}
-                />
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ── PINTEREST TAB ── */
-function PinterestTab({ pinterest, onPinterestFile }) {
-  const pinRows = useMemo(() => {
-    if (!pinterest) return [];
-    return Object.entries(pinterest.byPin).map(([name, d]) => ({
-      name,
-      impressions: d.impressions,
-      clicks: d.clicks,
-      saves: d.saves,
-      spend: d.spend,
-      conversions: d.conversions,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-      cpa: d.conversions > 0 ? d.spend / d.conversions : 0,
-    }));
-  }, [pinterest]);
-  const { sorted, sort, onSort } = useSortable(pinRows, "conversions");
-
-  return (
-    <div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-          marginBottom: 24,
-        }}
-      >
-        <UploadZone
-          label="Pinterest Ads CSV"
-          sub="Ads Manager → Reporting → Export CSV"
-          onFile={onPinterestFile}
-          loaded={!!pinterest}
-          color={T.pinterest}
-        />
-        <div
-          style={{
-            background: T.pinterestLight,
-            borderRadius: 10,
-            padding: "14px 18px",
-            fontSize: 11,
-            color: "#9a1a1a",
-            lineHeight: 1.8,
-          }}
-        >
-          <strong
-            style={{
-              display: "block",
-              marginBottom: 6,
-              fontSize: 10,
-              letterSpacing: "0.1em",
-              fontFamily: "'Syne',sans-serif",
-            }}
-          >
-            COMO EXPORTAR
-          </strong>
-          Pinterest Ads → <b>Reporting</b>
-          <br />→ selecione período → <b>Export data</b> → CSV
-          <br />
-          <span style={{ color: T.pinterest, fontSize: 10 }}>
-            Inclua: Impressões, Cliques, Saves, Gasto, Checkouts
-          </span>
-        </div>
-      </div>
-      {!pinterest && (
-        <EmptyState icon="📌" msg="Faça upload do CSV do Pinterest Ads" />
-      )}
-      {pinterest && (
-        <>
-          <SectionTitle color={T.pinterest}>Resumo Pinterest</SectionTitle>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))",
-              gap: 10,
-              marginBottom: 22,
-            }}
-          >
-            <KPI
-              label="Impressões"
-              value={fmt(pinterest.totals.impressions)}
-              accent={T.pinterest}
-            />
-            <KPI
-              label="Cliques"
-              value={fmt(pinterest.totals.clicks)}
-              accent={T.pinterest}
-            />
-            <KPI
-              label="Saves"
-              value={fmt(pinterest.totals.saves)}
-              accent={T.pinterest}
-            />
-            <KPI
-              label="CTR"
-              value={fmtPct(pinterest.totals.ctr)}
-              accent={T.pinterest}
-            />
-            <KPI
-              label="Gasto"
-              value={fmtD(pinterest.totals.spend)}
-              accent={T.pinterest}
-            />
-            <KPI
-              label="Conversões"
-              value={fmt(pinterest.totals.conversions)}
-              accent={T.good}
-            />
-            <KPI
-              label="CPA"
-              value={fmtD(pinterest.totals.cpa)}
-              accent={T.warn}
-            />
-          </div>
-          {sorted.length > 0 && (
-            <>
-              <SectionTitle color={T.pinterest}>
-                Pins — {sorted.length}
-              </SectionTitle>
-              <div
-                style={{
-                  background: T.card,
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 12,
-                  overflow: "hidden",
-                }}
-              >
-                <DataTable
-                  sort={sort}
-                  onSort={onSort}
-                  cols={[
-                    {
-                      key: "name",
-                      label: "Pin",
-                      align: "left",
-                      render: (v) => (
-                        <span
-                          style={{
-                            maxWidth: 200,
-                            display: "block",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            fontWeight: 500,
-                            color: T.text,
-                          }}
-                        >
-                          {v}
-                        </span>
-                      ),
-                    },
-                    {
-                      key: "impressions",
-                      label: "Impr.",
-                      render: (v) => fmt(v),
-                    },
-                    { key: "clicks", label: "Cliques", render: (v) => fmt(v) },
-                    { key: "saves", label: "Saves", render: (v) => fmt(v) },
-                    { key: "ctr", label: "CTR", render: (v) => fmtPct(v) },
-                    { key: "spend", label: "Gasto", render: (v) => fmtD(v) },
-                    {
-                      key: "conversions",
-                      label: "Conversões",
-                      render: (v) => fmt(v),
-                      color: (v) => (v > 0 ? T.good : T.faint),
-                    },
-                  ]}
-                  rows={sorted}
-                />
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ── CAMPAIGN CONFIG TAB ── */
-const DEFAULT_CFG = {
-  campaignName: "Vendas | Fev26",
-  objective: "Vendas",
-  optimization: "Maximizar conversões",
-  event: "Iniciar finalização da compra",
-  pixel: "a (pixel ID: 1255075166468968)",
-  budget: "R$ 50,00/dia",
-  attribution: "Padrão",
-  advantagePlus: true,
-  countries: [
-    "🇩🇪 Alemanha",
-    "🇪🇸 Espanha",
-    "🇫🇷 França",
-    "🇬🇧 Reino Unido",
-    "🇮🇪 Irlanda",
-    "🇳🇱 Países Baixos",
-    "🇺🇸 Estados Unidos",
-  ],
-  ageMin: "23",
-  ageMax: "50",
-  gender: "Todos",
-  lookalikes:
-    "Semelhante (1%) – leads\nSemelhante (1%) – client list gallery wall mockups jan/26\nmailing – prospects.csv",
-  interests:
-    "Artes visuais (arte)\nImpressão sob demanda\nEtsy\nFreelancer (carreiras)\nArts, Artists, Artwork\nCampo de estudo: Graphic designer\nEmpregadores: Freelancer, Cargo: Designer, Photographer, Graphic designer, Graphic Designer/Illustrator, Art director, Graphic design, Freelance Graphic Designer ou Owner/Photographer",
-  placements: "Automático (Advantage+)",
-  notes:
-    "Criada em 3/fev/2026. Advantage+ Sales ativo. Evento: Initiate Checkout (não Purchase — monitorar se isso afeta volume de dados).",
 };
 
-function CampaignConfigTab() {
-  const [cfg, setCfg] = useState(DEFAULT_CFG);
-  const [newCountry, setNewCountry] = useState("");
-  const set = (k, v) => setCfg((c) => ({ ...c, [k]: v }));
-  const F = ({ label, k, multi, rows = 3 }) => (
-    <div style={{ marginBottom: 14 }}>
-      <div
-        style={{
-          fontSize: 9,
-          color: T.muted,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          marginBottom: 5,
-          fontFamily: "'Syne',sans-serif",
-        }}
-      >
-        {label}
+function DailyChart({data}){
+  const[mode,setMode]=useState("roas");
+  if(!data?.length)return null;
+  const hasBoth=data.some(d=>d.spend>0)&&data.some(d=>d.orders>0);
+
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"18px 20px",marginBottom:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <SectionTitle color={T.violet} mb={0}>Tendência Diária</SectionTitle>
+        <div style={{display:"flex",gap:4}}>
+          {[["roas","ROAS por dia"],["spend","Gasto × Receita"],["orders","Pedidos"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setMode(k)} style={{
+              fontSize:10,padding:"4px 10px",borderRadius:20,cursor:"pointer",fontFamily:"'Syne',sans-serif",
+              fontWeight:700,letterSpacing:"0.06em",border:`1px solid ${mode===k?T.violet:T.border}`,
+              background:mode===k?T.violetL:"transparent",color:mode===k?T.violet:T.muted,
+            }}>{l}</button>
+          ))}
+        </div>
       </div>
-      {multi ? (
-        <textarea
-          value={cfg[k]}
-          onChange={(e) => set(k, e.target.value)}
-          rows={rows}
-          style={{
-            width: "100%",
-            background: "#faf8f5",
-            border: `1px solid ${T.border}`,
-            borderRadius: 6,
-            padding: "8px 12px",
-            fontSize: 12,
-            resize: "vertical",
-            lineHeight: 1.6,
-          }}
-        />
-      ) : (
-        <input
-          value={cfg[k]}
-          onChange={(e) => set(k, e.target.value)}
-          style={{
-            width: "100%",
-            background: "#faf8f5",
-            border: `1px solid ${T.border}`,
-            borderRadius: 6,
-            padding: "8px 12px",
-            fontSize: 12,
-          }}
-        />
+      <ResponsiveContainer width="100%" height={190}>
+        {mode==="roas"?(
+          <LineChart data={data} margin={{top:4,right:8,left:0,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0ebe4" vertical={false}/>
+            <XAxis dataKey="label" tick={{fontSize:9,fill:T.faint}} tickLine={false} axisLine={false}/>
+            <YAxis tick={{fontSize:9,fill:T.faint}} tickLine={false} axisLine={false} tickFormatter={v=>v+"×"}/>
+            <Tooltip content={<ChartTip/>}/>
+            <ReferenceLine y={1} stroke={T.warn} strokeDasharray="4 2" strokeWidth={1.5}/>
+            <Line type="monotone" dataKey="roas" name="ROAS" stroke={T.violet} strokeWidth={2} dot={{r:3,fill:T.violet}} connectNulls/>
+          </LineChart>
+        ):mode==="spend"?(
+          <BarChart data={data} margin={{top:4,right:8,left:0,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0ebe4" vertical={false}/>
+            <XAxis dataKey="label" tick={{fontSize:9,fill:T.faint}} tickLine={false} axisLine={false}/>
+            <YAxis tick={{fontSize:9,fill:T.faint}} tickLine={false} axisLine={false}/>
+            <Tooltip content={<ChartTip/>}/>
+            <Legend wrapperStyle={{fontSize:10,paddingTop:6}}/>
+            <Bar dataKey="spend"  name="Gasto R$"    fill={T.meta}    radius={[2,2,0,0]}/>
+            <Bar dataKey="revBRL" name="Receita R$"  fill={T.shopify} radius={[2,2,0,0]}/>
+          </BarChart>
+        ):(
+          <BarChart data={data} margin={{top:4,right:8,left:0,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0ebe4" vertical={false}/>
+            <XAxis dataKey="label" tick={{fontSize:9,fill:T.faint}} tickLine={false} axisLine={false}/>
+            <YAxis tick={{fontSize:9,fill:T.faint}} tickLine={false} axisLine={false}/>
+            <Tooltip content={<ChartTip/>}/>
+            <Legend wrapperStyle={{fontSize:10,paddingTop:6}}/>
+            <Bar dataKey="orders"    name="Pedidos Shopify" fill={T.shopify} radius={[2,2,0,0]}/>
+            <Bar dataKey="purchases" name="Compras Meta"    fill={T.meta}    radius={[2,2,0,0]}/>
+          </BarChart>
+        )}
+      </ResponsiveContainer>
+      {mode==="roas"&&!hasBoth&&(
+        <div style={{fontSize:10,color:T.faint,textAlign:"center",marginTop:4}}>
+          Suba os dois CSVs (Meta + Shopify) para ver ROAS por dia
+        </div>
       )}
     </div>
   );
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-      <div>
-        <div
-          style={{
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            borderRadius: 12,
-            padding: 20,
-            marginBottom: 16,
-          }}
-        >
-          <SectionTitle color={T.meta}>Estrutura</SectionTitle>
-          <F label="Nome da campanha" k="campaignName" />
-          <F label="Objetivo" k="objective" />
-          <F label="Otimização" k="optimization" />
-          <F label="Evento de conversão" k="event" />
-          <F label="Pixel / Conjunto de dados" k="pixel" />
-          <F label="Orçamento diário" k="budget" />
-          <F label="Atribuição" k="attribution" />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 14,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 9,
-                color: T.muted,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                fontFamily: "'Syne',sans-serif",
-              }}
-            >
-              Advantage+ Sales
-            </div>
-            <button
-              onClick={() => set("advantagePlus", !cfg.advantagePlus)}
-              style={{
-                background: cfg.advantagePlus ? T.metaLight : "#f3f4f6",
-                border: "none",
-                cursor: "pointer",
-                padding: "4px 14px",
-                borderRadius: 20,
-                fontSize: 11,
-                fontWeight: 700,
-                color: cfg.advantagePlus ? T.meta : "#888",
-                fontFamily: "'Syne',sans-serif",
-              }}
-            >
-              {cfg.advantagePlus ? "ATIVADO" : "DESATIVADO"}
-            </button>
-          </div>
-          <F label="Posicionamentos" k="placements" />
-        </div>
-        <div
-          style={{
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            borderRadius: 12,
-            padding: 20,
-          }}
-        >
-          <SectionTitle color={T.warn}>Notas Internas</SectionTitle>
-          <F label="Observações" k="notes" multi rows={5} />
-        </div>
+}
+
+/* ─── COUNTRY CROSSOVER ──────────────────────────────────── */
+function CountryCrossover({meta,shopify,rate}){
+  const rows=useMemo(()=>{
+    const countries=new Set([
+      ...Object.keys(meta?.byCountry||{}),
+      ...Object.keys(shopify?.byCountry||{})
+    ]);
+    return Array.from(countries).map(c=>{
+      const m=meta?.byCountry[c]||{};
+      const s=shopify?.byCountry[c]||{};
+      const revBRL=(s.revenue||0)*rate;
+      return{
+        country:c,
+        metaSpend:m.spend||0, metaPurchases:m.purchases||0, metaLPV:m.lpv||0, metaAddCart:m.addCart||0,
+        shopifyOrders:s.orders||0, shopifyRevUSD:s.revenue||0, shopifyRevBRL:revBRL,
+        roas:(m.spend||0)>0&&revBRL>0?revBRL/(m.spend||1):0,
+        gap:(m.purchases||0)-(s.orders||0),
+      };
+    }).filter(r=>r.metaSpend>0||r.shopifyOrders>0);
+  },[meta,shopify,rate]);
+
+  const{sorted,sort,onSort}=useSortable(rows,"shopifyOrders");
+
+  if(!rows.length)return(
+    <div style={{background:T.metaL,borderRadius:10,padding:"14px 18px",fontSize:12,color:"#1e40af",lineHeight:1.6}}>
+      Suba Meta Ads CSV + Shopify CSV para ver o cruzamento por país.
+    </div>
+  );
+
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
+      <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+        <SectionTitle color={T.violet} mb={0}>Meta × Shopify por País</SectionTitle>
+        <span style={{fontSize:10,color:T.faint}}>ROAS = receita Shopify (BRL) ÷ gasto Meta · Δ = compras Meta − pedidos Shopify</span>
       </div>
-      <div>
-        <div
-          style={{
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            borderRadius: 12,
-            padding: 20,
-            marginBottom: 16,
-          }}
-        >
-          <SectionTitle color={T.shopify}>Público</SectionTitle>
-          <div style={{ marginBottom: 14 }}>
-            <div
-              style={{
-                fontSize: 9,
-                color: T.muted,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                marginBottom: 8,
-                fontFamily: "'Syne',sans-serif",
-              }}
-            >
-              Países
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-                marginBottom: 8,
-              }}
-            >
-              {cfg.countries.map((c) => (
-                <span
-                  key={c}
-                  style={{
-                    fontSize: 11,
-                    background: T.metaLight,
-                    color: T.meta,
-                    padding: "3px 10px",
-                    borderRadius: 20,
-                    border: `1px solid #bfdbfe`,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  {c}
-                  <button
-                    onClick={() =>
-                      set(
-                        "countries",
-                        cfg.countries.filter((x) => x !== c)
-                      )
-                    }
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      color: "#93c5fd",
-                      fontSize: 12,
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <input
-                value={newCountry}
-                onChange={(e) => setNewCountry(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newCountry.trim()) {
-                    set("countries", [...cfg.countries, newCountry.trim()]);
-                    setNewCountry("");
-                  }
-                }}
-                placeholder="+ País"
-                style={{
-                  fontSize: 11,
-                  background: "#f0f9ff",
-                  border: `1px dashed #93c5fd`,
-                  borderRadius: 20,
-                  padding: "3px 10px",
-                  color: T.meta,
-                  width: 100,
-                }}
-              />
-            </div>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 10,
-              marginBottom: 14,
-            }}
-          >
-            {[
-              ["Idade mín.", "ageMin"],
-              ["Idade máx.", "ageMax"],
-              ["Gênero", "gender"],
-            ].map(([l, k]) => (
-              <div key={k}>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: T.muted,
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    marginBottom: 5,
-                    fontFamily: "'Syne',sans-serif",
-                  }}
-                >
-                  {l}
-                </div>
-                <input
-                  value={cfg[k]}
-                  onChange={(e) => set(k, e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "#faf8f5",
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 6,
-                    padding: "6px 10px",
-                    fontSize: 12,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-          <F
-            label="Públicos Lookalike / Personalizados"
-            k="lookalikes"
-            multi
-            rows={4}
-          />
-        </div>
-        <div
-          style={{
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            borderRadius: 12,
-            padding: 20,
-          }}
-        >
-          <SectionTitle color={T.shopify}>
-            Interesses / Direcionamento Detalhado
-          </SectionTitle>
-          <F label="Interesses" k="interests" multi rows={7} />
-        </div>
+      <DataTable sort={sort} onSort={onSort}
+        cols={[
+          {key:"country",       label:"País",         align:"left",  render:v=><b style={{color:T.text,fontSize:12}}>{v}</b>},
+          {key:"metaSpend",     label:"Gasto Meta",   render:v=>fmtR(v)},
+          {key:"metaLPV",       label:"LPV",          render:v=>fmt(v)},
+          {key:"metaAddCart",   label:"Cart",         render:v=>fmt(v)},
+          {key:"metaPurchases", label:"Compras Meta", render:v=>fmt(v), color:v=>v>0?T.meta:T.faint},
+          {key:"shopifyOrders", label:"Pedidos Shop", render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
+          {key:"shopifyRevUSD", label:"Receita USD",  render:v=>fmtUSD(v), color:v=>v>0?T.good:T.faint},
+          {key:"shopifyRevBRL", label:"Receita BRL",  render:v=>fmtR(v),   color:v=>v>0?T.good:T.faint},
+          {key:"roas",          label:"ROAS",         render:v=>fmtX(v), color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
+          {key:"gap",           label:"Δ",            render:v=>v===0?"=":(v>0?`+${v}`:`${v}`), color:v=>v===0?T.good:Math.abs(v)<=1?T.warn:T.bad},
+        ]}
+        rows={sorted}/>
+      <div style={{padding:"8px 16px",fontSize:10,color:T.faint,borderTop:`1px solid ${T.border}`,lineHeight:1.5}}>
+        Δ positivo = Meta reporta mais compras que o Shopify registra (over-attribution esperado). Δ negativo = pedidos Shopify sem origem Meta (orgânico/direto/Pinterest).
       </div>
     </div>
   );
 }
 
-/* ── CONSOLIDADO TAB ── */
-function ConsolidatedTab({ meta, shopifyOrders, pinterest }) {
-  const [shopifyRevUSD, setShopifyRevUSD] = useState("");
-  const [usdBrl, setUsdBrl] = useState("5.85");
-
-  const metaSpend = meta?.totals.spend ?? 0;
-  const pintSpend = pinterest?.totals.spend ?? 0;
-  const totalSpend = metaSpend + pintSpend;
-
-  // ROAS calculado pelo Shopify
-  const shopifyRevNum =
-    parseFloat(String(shopifyRevUSD).replace(",", ".")) || 0;
-  const usdBrlNum = parseFloat(String(usdBrl).replace(",", ".")) || 5.85;
-  const shopifyRevBRL = shopifyRevNum * usdBrlNum;
-  const roas =
-    totalSpend > 0 && shopifyRevBRL > 0 ? shopifyRevBRL / totalSpend : 0;
-  const roasColor =
-    roas >= 3 ? T.good : roas >= 1 ? T.warn : roas > 0 ? T.bad : T.faint;
-
-  const hasData = meta || shopifyOrders || pinterest;
-
-  // Auto-insights
-  const insights = [];
-  if (meta) {
-    const topC = Object.entries(meta.byCreative).sort(
-      ([, a], [, b]) => b.purchases - a.purchases
-    )[0];
-    if (topC && topC[1].purchases > 0)
-      insights.push({
-        t: "info",
-        m: `Top criativo: "${topC[0].slice(0, 55)}…" — ${fmt(
-          topC[1].purchases
-        )} compras · CPA ${fmtR(topC[1].spend / topC[1].purchases)}`,
-      });
-    const topCountry = Object.entries(meta.byCountry)
-      .filter(([, d]) => d.purchases > 0)
-      .sort(([, a], [, b]) => b.purchases - a.purchases)[0];
-    if (topCountry)
-      insights.push({
-        t: "info",
-        m: `País top: ${topCountry[0]} — ${fmt(
-          topCountry[1].purchases
-        )} compras · gasto ${fmtR(topCountry[1].spend)}`,
-      });
-    if (meta.totals.cvr < 1 && meta.totals.lpv > 20)
-      insights.push({
-        t: "warn",
-        m: `CVR baixo (${fmtPct(
-          meta.totals.cvr
-        )}) — menos de 1% dos visitantes compram. Revisar página de destino.`,
-      });
-    if (meta.totals.addCart > 0 && meta.totals.purchases > 0) {
-      const cartConv = (meta.totals.purchases / meta.totals.addCart) * 100;
-      if (cartConv < 5)
-        insights.push({
-          t: "warn",
-          m: `Alto abandono de carrinho — só ${fmtPct(
-            cartConv
-          )} dos que adicionam finalizam compra`,
-        });
-    }
-    // Check if Cozinha is eating too much budget vs results
-    const cozinha =
-      meta.byCreative[
-        Object.keys(meta.byCreative).find((k) => k.includes("Cozinha")) || ""
-      ];
-    const jantar =
-      meta.byCreative[
-        Object.keys(meta.byCreative).find((k) => k.includes("Sala Jantar")) ||
-          ""
-      ];
-    if (cozinha && jantar && cozinha.spend > 0 && jantar.spend > 0) {
-      const cpaCoz =
-        cozinha.purchases > 0 ? cozinha.spend / cozinha.purchases : 999;
-      const cpaJan =
-        jantar.purchases > 0 ? jantar.spend / jantar.purchases : 999;
-      if (cpaCoz > cpaJan * 1.5 && jantar.purchases > 0)
-        insights.push({
-          t: "bad",
-          m: `Sala Jantar tem CPA ${fmtR(cpaJan)} vs Cozinha ${fmtR(
-            cpaCoz
-          )} — Cozinha está consumindo ${fmtPct(
-            (cozinha.spend / metaSpend) * 100
-          )} do budget com CPA mais alto`,
-        });
-    }
-  }
-  if (roas > 0) {
-    if (roas >= 3)
-      insights.push({
-        t: "good",
-        m: `ROAS Global ${fmtX(
-          roas
-        )} — acima de 3× é saudável para produto digital`,
-      });
-    else if (roas >= 1)
-      insights.push({
-        t: "warn",
-        m: `ROAS Global ${fmtX(
-          roas
-        )} — positivo mas abaixo de 3×. Escalar com cautela.`,
-      });
-    else
-      insights.push({
-        t: "bad",
-        m: `ROAS Global ${fmtX(
-          roas
-        )} — abaixo de 1×. Receita não cobre o gasto em ads.`,
-      });
-  }
-
-  const iconMap = { good: "✓", bad: "✗", warn: "⚠", info: "→" };
-  const colorMap = { good: T.good, bad: T.bad, warn: T.warn, info: T.meta };
-  const bgMap = {
-    good: T.shopifyLight,
-    bad: "#fee2e2",
-    warn: T.warnLight,
-    info: T.metaLight,
-  };
-
-  return (
+/* ─── SUGGESTIONS PANEL ──────────────────────────────────── */
+function SuggestionsPanel({meta,shopify,rate}){
+  const items=useMemo(()=>buildSuggestions(meta,shopify,rate),[meta,shopify,rate]);
+  if(!items.length)return null;
+  const icon={good:"✓",bad:"✗",warn:"⚠",action:"→"};
+  const col={good:T.good,bad:T.bad,warn:T.warn,action:T.violet};
+  const bg={good:T.shopifyL,bad:"#fee2e2",warn:T.warnL,action:T.violetL};
+  return(
     <div>
-      {!hasData && (
-        <EmptyState icon="◎" msg="Faça upload de pelo menos um arquivo" />
-      )}
-      {hasData && (
+      <SectionTitle color={T.violet}>Insights & Sugestões</SectionTitle>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {items.map((s,i)=>(
+          <div key={i} style={{background:bg[s.type],border:`1px solid ${col[s.type]}40`,borderRadius:9,padding:"10px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+            <span style={{fontSize:13,color:col[s.type],fontWeight:700,flexShrink:0,marginTop:1}}>{icon[s.type]}</span>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:2,fontFamily:"'Syne',sans-serif"}}>{s.title}</div>
+              <div style={{fontSize:11,color:"#4a4035",lineHeight:1.55}}>{s.msg}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── TAB: CONSOLIDADO ───────────────────────────────────── */
+function ConsolidatedTab({meta,shopify,rate}){
+  const dailyData=useMemo(()=>buildDailyData(meta?.byDay,shopify?.byDay,rate),[meta,shopify,rate]);
+  const roasGlobal=meta?.totals.spend>0&&shopify?(shopify.totalRevenue*rate)/meta.totals.spend:0;
+  const roasDays=dailyData.filter(d=>d.roas!==null);
+  const roasAvg=roasDays.length>0?roasDays.reduce((a,b)=>a+b.roas,0)/roasDays.length:0;
+
+  return(
+    <div>
+      <SectionTitle color={T.violet}>Visão Geral do Período</SectionTitle>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:10,marginBottom:20}}>
+        <KPI label="Gasto Meta"      value={fmtR(meta?.totals.spend)}              accent={T.meta}/>
+        <KPI label="Receita Shopify" value={fmtUSD(shopify?.totalRevenue)}          accent={T.shopify} sub="em USD"/>
+        <KPI label="Receita em BRL"  value={fmtR((shopify?.totalRevenue||0)*rate)}  accent={T.shopify}/>
+        <KPI label="ROAS Global"     value={fmtX(roasGlobal)} large
+          accent={roasGlobal>=3?T.good:roasGlobal>=1?T.warn:roasGlobal>0?T.bad:T.border}/>
+        <KPI label="ROAS Médio/Dia"  value={fmtX(roasAvg)}   accent={T.violet}     sub={`${roasDays.length} dias`}/>
+        <KPI label="Pedidos Shopify" value={fmt(shopify?.totalOrders)}              accent={T.shopify}/>
+        <KPI label="Ticket Médio"    value={fmtUSD(shopify?.avgTicket)}             accent={T.shopify}/>
+        <KPI label="Compras Meta"    value={fmt(meta?.totals.purchases)}            accent={T.meta} sub="atribuição Meta"/>
+        <KPI label="CPA Meta"        value={fmtR(meta?.totals.cpa)}               accent={T.meta}/>
+        <KPI label="LPV"             value={fmt(meta?.totals.lpv)}                 accent={T.violet}/>
+        <KPI label="Custo/LPV"       value={fmtR(meta?.totals.costLpv)}           accent={T.violet}/>
+        <KPI label="CVR LPV→Compra" value={fmtPct(meta?.totals.cvr)}             accent={T.violet}/>
+      </div>
+
+      <DailyChart data={dailyData}/>
+      <CountryCrossover meta={meta} shopify={shopify} rate={rate}/>
+      <SuggestionsPanel meta={meta} shopify={shopify} rate={rate}/>
+    </div>
+  );
+}
+
+/* ─── TAB: META ADS ──────────────────────────────────────── */
+function MetaTab({meta,shopify,rate,onFile}){
+  const[sub,setSub]=useState("overview");
+
+  const creativeRows=useMemo(()=>{
+    if(!meta)return[];
+    return Object.entries(meta.byCreative).map(([name,d])=>({
+      name,impressions:d.impressions,lpv:d.lpv,addCart:d.addCart,
+      checkout:d.checkout,purchases:d.purchases,spend:d.spend,
+      cpa:d.purchases>0?d.spend/d.purchases:0,
+      cvr:d.lpv>0?(d.purchases/d.lpv)*100:0,
+      costLpv:d.lpv>0?d.spend/d.lpv:0,
+    }));
+  },[meta]);
+
+  const countryRows=useMemo(()=>{
+    if(!meta)return[];
+    return Object.entries(meta.byCountry).filter(([,d])=>d.purchases>0)
+      .map(([country,d])=>({
+        country,purchases:d.purchases,spend:d.spend,impressions:d.impressions,lpv:d.lpv,
+        shopifyOrders:shopify?.byCountry[country]?.orders||0,
+        shopifyRevUSD:shopify?.byCountry[country]?.revenue||0,
+        shopifyRevBRL:(shopify?.byCountry[country]?.revenue||0)*rate,
+        roas:d.spend>0&&shopify?.byCountry[country]?.revenue?(shopify.byCountry[country].revenue*rate)/d.spend:0,
+        cpa:d.purchases>0?d.spend/d.purchases:0,
+      }));
+  },[meta,shopify,rate]);
+
+  const{sorted:sC,sort:sortC,onSort:onSC}=useSortable(creativeRows,"purchases");
+  const{sorted:sCo,sort:sortCo,onSort:onSCo}=useSortable(countryRows,"purchases");
+
+  return(
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+        <UploadZone label="Meta Ads CSV" sub="Anúncios + Detalhamento País → CSV" onFile={onFile} loaded={!!meta} color={T.meta}/>
+        <div style={{background:T.metaL,borderRadius:10,padding:"12px 14px",fontSize:11,color:"#1e40af",lineHeight:1.85}}>
+          <div style={{fontWeight:700,fontSize:9,letterSpacing:"0.12em",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>COMO EXPORTAR — UM ARQUIVO SÓ</div>
+          1. Gerenciador → aba <b>Anúncios</b><br/>
+          2. Seleciona o período<br/>
+          3. <b>Detalhamento → País</b><br/>
+          4. <b>Exportar → CSV</b>
+        </div>
+      </div>
+
+      {!meta&&<div style={{textAlign:"center",padding:"44px 0",color:T.faint,fontSize:13}}>Faça upload do CSV do Meta Ads</div>}
+      {meta&&(
         <>
-          {/* ROAS manual input */}
-          <div
-            style={{
-              background: T.card,
-              border: `2px solid ${roas > 0 ? roasColor : T.border}`,
-              borderRadius: 12,
-              padding: 20,
-              marginBottom: 24,
-            }}
-          >
-            <SectionTitle color={T.consolidated}>
-              ROAS Global — calculado pelo Shopify
-            </SectionTitle>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr auto",
-                gap: 12,
-                alignItems: "end",
-                marginBottom: 16,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: T.muted,
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    marginBottom: 6,
-                    fontFamily: "'Syne',sans-serif",
-                  }}
-                >
-                  Receita Shopify (USD)
-                </div>
-                <input
-                  value={shopifyRevUSD}
-                  onChange={(e) => setShopifyRevUSD(e.target.value)}
-                  placeholder="ex: 79.96"
-                  style={{
-                    width: "100%",
-                    background: "#faf8f5",
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 6,
-                    padding: "8px 12px",
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                />
-              </div>
-              <div>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: T.muted,
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    marginBottom: 6,
-                    fontFamily: "'Syne',sans-serif",
-                  }}
-                >
-                  Cotação USD → BRL
-                </div>
-                <input
-                  value={usdBrl}
-                  onChange={(e) => setUsdBrl(e.target.value)}
-                  placeholder="ex: 5.85"
-                  style={{
-                    width: "100%",
-                    background: "#faf8f5",
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 6,
-                    padding: "8px 12px",
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                />
-              </div>
-              <div style={{ textAlign: "center", paddingBottom: 2 }}>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: T.muted,
-                    letterSpacing: "0.1em",
-                    marginBottom: 4,
-                    fontFamily: "'Syne',sans-serif",
-                  }}
-                >
-                  ROAS GLOBAL
-                </div>
-                <div
-                  style={{
-                    fontSize: 32,
-                    fontWeight: 800,
-                    color: roas > 0 ? roasColor : T.faint,
-                    fontFamily: "'Syne',sans-serif",
-                  }}
-                >
-                  {roas > 0 ? fmtX(roas) : "—"}
-                </div>
-              </div>
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4,1fr)",
-                gap: 10,
-              }}
-            >
-              <KPI
-                label="Gasto Total Ads"
-                value={fmtR(totalSpend)}
-                accent={T.consolidated}
-              />
-              <KPI label="Gasto Meta" value={fmtR(metaSpend)} accent={T.meta} />
-              <KPI
-                label="Receita (USD)"
-                value={shopifyRevNum > 0 ? fmtD(shopifyRevNum, "$") : "—"}
-                accent={T.shopify}
-              />
-              <KPI
-                label="Receita (BRL)"
-                value={shopifyRevBRL > 0 ? fmtR(shopifyRevBRL) : "—"}
-                accent={T.shopify}
-              />
-            </div>
+          <div style={{display:"flex",gap:2,marginBottom:18,background:T.bg,borderRadius:8,padding:3,border:`1px solid ${T.border}`,width:"fit-content"}}>
+            {["overview","funil","criativos","países"].map(s=>(
+              <button key={s} onClick={()=>setSub(s)} style={{
+                background:sub===s?T.card:"transparent",border:"none",cursor:"pointer",
+                padding:"5px 14px",fontSize:11,fontWeight:sub===s?700:500,
+                color:sub===s?T.meta:T.muted,borderRadius:6,transition:"all 0.15s",
+                fontFamily:"'Syne',sans-serif",letterSpacing:"0.05em",
+                boxShadow:sub===s?"0 1px 3px rgba(0,0,0,0.07)":"none"}}>
+                {s.charAt(0).toUpperCase()+s.slice(1)}
+              </button>
+            ))}
           </div>
 
-          {/* Canais */}
-          <SectionTitle color={T.consolidated}>Canais</SectionTitle>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${
-                [meta, pinterest].filter(Boolean).length || 1
-              },1fr)`,
-              gap: 12,
-              marginBottom: 24,
-            }}
-          >
-            {meta && (
-              <div
-                style={{
-                  background: T.card,
-                  border: `2px solid ${T.meta}25`,
-                  borderRadius: 12,
-                  padding: 18,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 12,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: T.meta,
-                      fontFamily: "'Syne',sans-serif",
-                    }}
-                  >
-                    Meta Ads
-                  </span>
-                  <span
-                    style={{ fontSize: 12, fontWeight: 700, color: T.meta }}
-                  >
-                    {fmtR(meta.totals.spend)}
-                  </span>
-                </div>
-                {[
-                  ["Impressões", fmt(meta.totals.impressions)],
-                  ["LPV", fmt(meta.totals.lpv)],
-                  ["Add Cart", fmt(meta.totals.addCart)],
-                  ["Compras", fmt(meta.totals.purchases)],
-                  ["CPA", fmtR(meta.totals.cpa)],
-                  ["CVR", fmtPct(meta.totals.cvr)],
-                ].map(([l, v]) => (
-                  <div
-                    key={l}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "5px 0",
-                      borderBottom: `1px solid ${T.border}`,
-                      fontSize: 12,
-                    }}
-                  >
-                    <span style={{ color: T.muted }}>{l}</span>
-                    <span style={{ fontWeight: 600 }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {pinterest && (
-              <div
-                style={{
-                  background: T.card,
-                  border: `2px solid ${T.pinterest}25`,
-                  borderRadius: 12,
-                  padding: 18,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 12,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: T.pinterest,
-                      fontFamily: "'Syne',sans-serif",
-                    }}
-                  >
-                    Pinterest
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: T.pinterest,
-                    }}
-                  >
-                    {fmtD(pinterest.totals.spend)}
-                  </span>
-                </div>
-                {[
-                  ["Impressões", fmt(pinterest.totals.impressions)],
-                  ["Cliques", fmt(pinterest.totals.clicks)],
-                  ["Saves", fmt(pinterest.totals.saves)],
-                  ["CTR", fmtPct(pinterest.totals.ctr)],
-                  ["Conversões", fmt(pinterest.totals.conversions)],
-                ].map(([l, v]) => (
-                  <div
-                    key={l}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "5px 0",
-                      borderBottom: `1px solid ${T.border}`,
-                      fontSize: 12,
-                    }}
-                  >
-                    <span style={{ color: T.muted }}>{l}</span>
-                    <span style={{ fontWeight: 600 }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {insights.length > 0 && (
+          {sub==="overview"&&(
             <>
-              <SectionTitle color={T.consolidated}>
-                Insights & Alertas
-              </SectionTitle>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {insights.map((ins, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      background: bgMap[ins.t],
-                      border: `1px solid ${colorMap[ins.t]}30`,
-                      borderRadius: 8,
-                      padding: "10px 14px",
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 13,
-                        color: colorMap[ins.t],
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {iconMap[ins.t]}
-                    </span>
-                    <span
-                      style={{ fontSize: 12, color: T.text, lineHeight: 1.5 }}
-                    >
-                      {ins.m}
-                    </span>
+              <SectionTitle color={T.meta}>Investimento & Alcance</SectionTitle>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:10,marginBottom:18}}>
+                <KPI label="Valor Gasto"   value={fmtR(meta.totals.spend)}      accent={T.meta}/>
+                <KPI label="Alcance"       value={fmt(meta.totals.reach)}        accent={T.meta}/>
+                <KPI label="Impressões"    value={fmt(meta.totals.impressions)}  accent={T.meta}/>
+                <KPI label="Cliques"       value={fmt(meta.totals.clicks)}       accent={T.meta}/>
+              </div>
+              <SectionTitle color={T.meta}>Funil</SectionTitle>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:10}}>
+                <KPI label="Vis. Pág."    value={fmt(meta.totals.lpv)}          accent={T.violet}/>
+                <KPI label="Custo/LPV"   value={fmtR(meta.totals.costLpv)}    accent={T.violet}/>
+                <KPI label="Add Carrinho" value={fmt(meta.totals.addCart)}      accent={T.warn}/>
+                <KPI label="Checkouts"   value={fmt(meta.totals.checkout)}     accent={T.warn}/>
+                <KPI label="Compras"     value={fmt(meta.totals.purchases)}    accent={T.good}/>
+                <KPI label="CPA"         value={fmtR(meta.totals.cpa)}        accent={T.good}/>
+                <KPI label="CVR"         value={fmtPct(meta.totals.cvr)}      accent={T.violet}/>
+              </div>
+            </>
+          )}
+
+          {sub==="funil"&&(
+            <div style={{maxWidth:440,background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:20}}>
+              <SectionTitle color={T.meta}>Funil Visual</SectionTitle>
+              {[
+                {label:"Impressões",        value:meta.totals.impressions, color:"#93c5fd"},
+                {label:"Cliques",           value:meta.totals.clicks,      color:"#60a5fa"},
+                {label:"Vis. Pág. Destino", value:meta.totals.lpv,         color:T.violet},
+                {label:"Add Carrinho",      value:meta.totals.addCart,     color:T.warn},
+                {label:"Checkout",          value:meta.totals.checkout,    color:"#f97316"},
+                {label:"Compras (Meta)",    value:meta.totals.purchases,   color:T.good},
+              ].map(s=><FunnelBar key={s.label} {...s} max={meta.totals.impressions}/>)}
+              <div style={{marginTop:14,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,borderTop:`1px solid ${T.border}`,paddingTop:14}}>
+                {[
+                  {l:"Imp→LPV",    v:meta.totals.impressions>0?fmtPct((meta.totals.lpv/meta.totals.impressions)*100):"—"},
+                  {l:"LPV→Cart",   v:meta.totals.lpv>0?fmtPct((meta.totals.addCart/meta.totals.lpv)*100):"—"},
+                  {l:"LPV→Compra", v:meta.totals.lpv>0?fmtPct((meta.totals.purchases/meta.totals.lpv)*100):"—"},
+                ].map(r=>(
+                  <div key={r.l} style={{textAlign:"center"}}>
+                    <div style={{fontSize:9,color:T.faint,marginBottom:3,letterSpacing:"0.06em"}}>{r.l}</div>
+                    <div style={{fontSize:20,fontWeight:700,color:T.meta,fontFamily:"'Syne',sans-serif"}}>{r.v}</div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {sub==="criativos"&&(
+            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+              <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`}}>
+                <SectionTitle color={T.meta} mb={0}>Criativos — {sC.length} anúncios</SectionTitle>
+              </div>
+              <DataTable sort={sortC} onSort={onSC}
+                emptyMsg="Exporte na aba Anúncios (não Conjuntos)"
+                cols={[
+                  {key:"name",       label:"Criativo",  align:"left", render:v=><span style={{maxWidth:220,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,color:T.text,fontSize:11}}>{v}</span>},
+                  {key:"impressions",label:"Impr.",      render:v=>fmt(v)},
+                  {key:"lpv",        label:"LPV",        render:v=>fmt(v)},
+                  {key:"addCart",    label:"Cart",       render:v=>fmt(v)},
+                  {key:"purchases",  label:"Compras",    render:v=>fmt(v), color:v=>v>0?T.good:T.faint},
+                  {key:"spend",      label:"Gasto",      render:v=>fmtR(v)},
+                  {key:"cpa",        label:"CPA",        render:v=>v>0?fmtR(v):"—"},
+                  {key:"costLpv",    label:"R$/LPV",     render:v=>fmtR(v)},
+                  {key:"cvr",        label:"CVR",        render:v=>fmtPct(v)},
+                ]}
+                rows={sC}/>
+            </div>
+          )}
+
+          {sub==="países"&&(
+            countryRows.length===0
+              ?<div style={{background:T.metaL,borderRadius:10,padding:"14px 18px",fontSize:12,color:"#1e40af"}}>
+                Sem compras no período. Certifique que exportou com <b>Detalhamento → País</b>.
+               </div>
+              :<div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`}}>
+                  <SectionTitle color={T.meta} mb={0}>Países com Compras</SectionTitle>
+                </div>
+                <DataTable sort={sortCo} onSort={onSCo}
+                  cols={[
+                    {key:"country",       label:"País",         align:"left", render:v=><b style={{color:T.text}}>{v}</b>},
+                    {key:"impressions",   label:"Impr.",        render:v=>fmt(v)},
+                    {key:"lpv",           label:"LPV",          render:v=>fmt(v)},
+                    {key:"purchases",     label:"Compras Meta", render:v=>fmt(v), color:v=>v>0?T.meta:T.faint},
+                    {key:"shopifyOrders", label:"Pedidos Shop", render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
+                    {key:"spend",         label:"Gasto",        render:v=>fmtR(v)},
+                    {key:"shopifyRevUSD", label:"Receita USD",  render:v=>fmtUSD(v), color:v=>v>0?T.good:T.faint},
+                    {key:"roas",          label:"ROAS",         render:v=>fmtX(v), color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
+                    {key:"cpa",           label:"CPA",          render:v=>fmtR(v)},
+                  ]}
+                  rows={sCo}/>
+               </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─── TAB: SHOPIFY ───────────────────────────────────────── */
+function ShopifyTab({shopify,onFile}){
+  const countryRows=useMemo(()=>{
+    if(!shopify)return[];
+    return Object.entries(shopify.byCountry).map(([c,d])=>({
+      country:c,orders:d.orders,revenue:d.revenue,avgTicket:d.orders>0?d.revenue/d.orders:0
+    }));
+  },[shopify]);
+  const productRows=useMemo(()=>{
+    if(!shopify)return[];
+    return Object.entries(shopify.byProduct).map(([name,d])=>({name,orders:d.orders}));
+  },[shopify]);
+  const{sorted:sC,sort:sortC,onSort:onSC}=useSortable(countryRows,"revenue");
+  const{sorted:sP,sort:sortP,onSort:onSP}=useSortable(productRows,"orders");
+
+  return(
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+        <UploadZone label="Shopify Pedidos CSV" sub="Admin → Pedidos → Exportar → Todos" onFile={onFile} loaded={!!shopify} color={T.shopify}/>
+        <div style={{background:T.shopifyL,borderRadius:10,padding:"12px 14px",fontSize:11,color:"#065f46",lineHeight:1.85}}>
+          <div style={{fontWeight:700,fontSize:9,letterSpacing:"0.12em",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>COMO EXPORTAR</div>
+          Admin → Pedidos → <b>Exportar</b><br/>
+          Seleciona <b>Todos os pedidos</b> do período<br/>
+          Formato: <b>CSV simples</b>
+        </div>
+      </div>
+
+      {!shopify&&<div style={{textAlign:"center",padding:"44px 0",color:T.faint,fontSize:13}}>Faça upload do CSV de pedidos do Shopify</div>}
+      {shopify&&(
+        <>
+          <SectionTitle color={T.shopify}>Resumo</SectionTitle>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:10,marginBottom:20}}>
+            <KPI label="Pedidos"      value={fmt(shopify.totalOrders)}       accent={T.shopify}/>
+            <KPI label="Receita USD"  value={fmtUSD(shopify.totalRevenue)}   accent={T.shopify}/>
+            <KPI label="Ticket Médio" value={fmtUSD(shopify.avgTicket)}      accent={T.shopify}/>
+          </div>
+          {countryRows.length>0&&(
+            <>
+              <SectionTitle color={T.shopify}>Por País</SectionTitle>
+              <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
+                <DataTable sort={sortC} onSort={onSC}
+                  cols={[
+                    {key:"country",   label:"País",         align:"left", render:v=><b style={{color:T.text}}>{v}</b>},
+                    {key:"orders",    label:"Pedidos",      render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
+                    {key:"revenue",   label:"Receita USD",  render:v=>fmtUSD(v), color:v=>v>0?T.good:T.faint},
+                    {key:"avgTicket", label:"Ticket Médio", render:v=>fmtUSD(v)},
+                  ]}
+                  rows={sC}/>
+              </div>
+            </>
+          )}
+          {productRows.length>0&&(
+            <>
+              <SectionTitle color={T.shopify}>Por Produto</SectionTitle>
+              <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                <DataTable sort={sortP} onSort={onSP}
+                  cols={[
+                    {key:"name",   label:"Produto", align:"left", render:v=><span style={{maxWidth:300,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500,color:T.text}}>{v}</span>},
+                    {key:"orders", label:"Vendas",  render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
+                  ]}
+                  rows={sP}/>
               </div>
             </>
           )}
@@ -2251,181 +817,274 @@ function ConsolidatedTab({ meta, shopifyOrders, pinterest }) {
   );
 }
 
-/* ── MAIN APP ── */
-export default function App() {
-  const [tab, setTab] = useState("meta");
-  const [meta, setMeta] = useState(null);
-  const [shopifyOrders, setShopifyOrders] = useState(null);
-  const [pinterest, setPinterest] = useState(null);
+/* ─── TAB: PINTEREST ─────────────────────────────────────── */
+function PinterestTab({pinterest,onFile}){
+  const rows=useMemo(()=>{
+    if(!pinterest)return[];
+    return Object.entries(pinterest.byPin).map(([name,d])=>({
+      name,...d,ctr:d.impressions>0?(d.clicks/d.impressions)*100:0
+    }));
+  },[pinterest]);
+  const{sorted,sort,onSort}=useSortable(rows,"conversions");
 
-  const readCsv = (fn) => (file) => {
-    const r = new FileReader();
-    r.onload = (e) => fn(e.target.result);
-    r.readAsText(file, "UTF-8");
-  };
+  return(
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+        <UploadZone label="Pinterest Ads CSV" sub="Ads Manager → Reporting → Export CSV" onFile={onFile} loaded={!!pinterest} color={T.pinterest}/>
+        <div style={{background:T.pinterestL,borderRadius:10,padding:"12px 14px",fontSize:11,color:"#9a1a1a",lineHeight:1.85}}>
+          <div style={{fontWeight:700,fontSize:9,letterSpacing:"0.12em",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>COMO EXPORTAR</div>
+          Pinterest Ads → <b>Reporting</b><br/>
+          Seleciona período → <b>Export data</b><br/>
+          Inclui: Impressões, Cliques, Saves, Gasto, Conversões
+        </div>
+      </div>
+      {!pinterest&&<div style={{textAlign:"center",padding:"44px 0",color:T.faint,fontSize:13}}>Faça upload do CSV do Pinterest Ads</div>}
+      {pinterest&&(
+        <>
+          <SectionTitle color={T.pinterest}>Resumo</SectionTitle>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:10,marginBottom:18}}>
+            <KPI label="Impressões"  value={fmt(pinterest.totals.impressions)} accent={T.pinterest}/>
+            <KPI label="Cliques"     value={fmt(pinterest.totals.clicks)}      accent={T.pinterest}/>
+            <KPI label="Saves"       value={fmt(pinterest.totals.saves)}       accent={T.pinterest}/>
+            <KPI label="CTR"         value={fmtPct(pinterest.totals.ctr)}      accent={T.pinterest}/>
+            <KPI label="Gasto"       value={fmtUSD(pinterest.totals.spend)}    accent={T.pinterest}/>
+            <KPI label="Conversões"  value={fmt(pinterest.totals.conversions)} accent={T.good}/>
+            <KPI label="CPA"         value={fmtUSD(pinterest.totals.cpa)}      accent={T.warn}/>
+          </div>
+          <SectionTitle color={T.pinterest}>Pins — {sorted.length}</SectionTitle>
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+            <DataTable sort={sort} onSort={onSort}
+              cols={[
+                {key:"name",       label:"Pin",      align:"left", render:v=><span style={{maxWidth:220,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,fontSize:11,color:T.text}}>{v}</span>},
+                {key:"impressions",label:"Impr.",    render:v=>fmt(v)},
+                {key:"clicks",     label:"Cliques",  render:v=>fmt(v)},
+                {key:"saves",      label:"Saves",    render:v=>fmt(v)},
+                {key:"ctr",        label:"CTR",      render:v=>fmtPct(v)},
+                {key:"spend",      label:"Gasto",    render:v=>fmtUSD(v)},
+                {key:"conversions",label:"Conv.",    render:v=>fmt(v), color:v=>v>0?T.good:T.faint},
+              ]}
+              rows={sorted}/>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
-  const TABS = [
-    { id: "meta", label: "Meta Ads", color: T.meta, dot: !!meta },
-    { id: "shopify", label: "Shopify", color: T.shopify, dot: !!shopifyOrders },
-    {
-      id: "pinterest",
-      label: "Pinterest",
-      color: T.pinterest,
-      dot: !!pinterest,
-    },
-    { id: "config", label: "Campanha", color: "#7c3aed", dot: true },
-    {
-      id: "consolidated",
-      label: "Consolidado",
-      color: T.consolidated,
-      dot: !!(meta || shopifyOrders || pinterest),
-    },
-  ];
-
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: T.bg,
-        fontFamily: "'Instrument Sans',sans-serif",
-      }}
-    >
-      <GlobalStyles />
-      {/* Header */}
-      <div
-        style={{
-          background: T.card,
-          borderBottom: `1px solid ${T.border}`,
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1300,
-            margin: "0 auto",
-            display: "flex",
-            alignItems: "stretch",
-            justifyContent: "space-between",
-            height: 54,
-            padding: "0 24px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 26,
-                height: 26,
-                background: "#1a1714",
-                borderRadius: 6,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span
-                style={{
-                  color: "white",
-                  fontSize: 13,
-                  fontWeight: 800,
-                  fontFamily: "'Syne',sans-serif",
-                }}
-              >
-                G
-              </span>
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: T.text,
-                  fontFamily: "'Syne',sans-serif",
-                }}
-              >
-                Gallery Wall Mockups
-              </div>
-              <div
-                style={{ fontSize: 9, color: T.faint, letterSpacing: "0.08em" }}
-              >
-                PERFORMANCE DASHBOARD
-              </div>
+/* ─── TAB: CAMPANHA CONFIG ───────────────────────────────── */
+function CampaignTab(){
+  const[cfg,setCfg]=useState({
+    campaignName:"Vendas | Fev26",
+    objective:"Vendas",
+    optimization:"Maximizar conversões → Checkout",
+    event:"Iniciar finalização da compra",
+    pixel:"a (ID: 1255075166468968)",
+    budget:"R$ 50,00/dia",
+    attribution:"Padrão Meta",
+    countries:["DE","ES","FR","GB","IE","NL","US"],
+    ageMin:"23",ageMax:"50",gender:"Todos",
+    lookalikes:"Semelhante 1% – leads\nSemelhante 1% – client list GWM jan/26\nmailing prospects.csv",
+    interests:"Artes visuais\nImpressão sob demanda\nEtsy · Freelancer\nArts, Artists, Artwork\nGraphic designer (campo/empregador/cargo)",
+    placements:"Automático (Advantage+)",
+    notes:"",
+  });
+  const set=(k,v)=>setCfg(c=>({...c,[k]:v}));
+  const[newC,setNewC]=useState("");
+  const F=({label,k,multi,rows=3})=>(
+    <div style={{marginBottom:13}}>
+      <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{label}</div>
+      {multi
+        ?<textarea value={cfg[k]} onChange={e=>set(k,e.target.value)} rows={rows}
+           style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 10px",fontSize:11,resize:"vertical",lineHeight:1.6}}/>
+        :<input value={cfg[k]} onChange={e=>set(k,e.target.value)}
+           style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 10px",fontSize:11}}/>
+      }
+    </div>
+  );
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div>
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:14}}>
+          <SectionTitle color={T.meta}>Estrutura da Campanha</SectionTitle>
+          <F label="Nome da campanha" k="campaignName"/>
+          <F label="Objetivo" k="objective"/>
+          <F label="Otimização" k="optimization"/>
+          <F label="Evento de conversão" k="event"/>
+          <F label="Pixel / Dataset" k="pixel"/>
+          <F label="Orçamento diário" k="budget"/>
+          <F label="Modelo de atribuição" k="attribution"/>
+        </div>
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18}}>
+          <SectionTitle color={T.warn}>Notas internas</SectionTitle>
+          <F label="Observações" k="notes" multi rows={5}/>
+        </div>
+      </div>
+      <div>
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:14}}>
+          <SectionTitle color={T.shopify}>Público-alvo</SectionTitle>
+          <div style={{marginBottom:13}}>
+            <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6,fontFamily:"'Syne',sans-serif"}}>Países</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:6}}>
+              {cfg.countries.map(c=>(
+                <span key={c} style={{fontSize:11,background:T.metaL,color:T.meta,padding:"2px 9px",borderRadius:20,
+                  border:`1px solid ${T.meta}30`,display:"flex",gap:4,alignItems:"center"}}>
+                  {c}
+                  <button onClick={()=>set("countries",cfg.countries.filter(x=>x!==c))}
+                    style={{background:"none",border:"none",cursor:"pointer",color:"#93c5fd",fontSize:12,lineHeight:1}}>×</button>
+                </span>
+              ))}
+              <input value={newC} onChange={e=>setNewC(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter"&&newC.trim()){set("countries",[...cfg.countries,newC.trim().toUpperCase()]);setNewC("");}}}
+                placeholder="+ país" style={{fontSize:11,background:T.metaL,border:`1px dashed #93c5fd`,
+                borderRadius:20,padding:"2px 9px",color:T.meta,width:68}}/>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "0 16px",
-                  fontSize: 11,
-                  fontWeight: tab === t.id ? 700 : 500,
-                  color: tab === t.id ? t.color : T.muted,
-                  borderBottom:
-                    tab === t.id
-                      ? `3px solid ${t.color}`
-                      : "3px solid transparent",
-                  transition: "all 0.15s",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                  fontFamily: "'Syne',sans-serif",
-                  letterSpacing: "0.04em",
-                  whiteSpace: "nowrap",
-                  marginBottom: -1,
-                }}
-              >
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:13}}>
+            {[["ageMin","Idade mín."],["ageMax","Idade máx."],["gender","Gênero"]].map(([k,l])=>(
+              <div key={k}>
+                <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{l}</div>
+                <input value={cfg[k]} onChange={e=>set(k,e.target.value)}
+                  style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11}}/>
+              </div>
+            ))}
+          </div>
+          <F label="Lookalikes / Públicos" k="lookalikes" multi rows={4}/>
+        </div>
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18}}>
+          <SectionTitle color={T.shopify}>Interesses & Posicionamento</SectionTitle>
+          <F label="Direcionamento detalhado" k="interests" multi rows={5}/>
+          <F label="Posicionamentos" k="placements"/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── MAIN ───────────────────────────────────────────────── */
+export default function App(){
+  const[tab,setTab]=useState("consolidated");
+  const[dateFrom,setDateFrom]=useState("2026-02-03");
+  const[dateTo,setDateTo]=useState("");
+  const[dollarRate,setDollarRate]=useState(5.85);
+  const[loading,setLoading]=useState(true);
+  const[saveStatus,setSaveStatus]=useState("");
+
+  const[metaRaw,setMetaRaw]=useState(null);
+  const[shopifyRaw,setShopifyRaw]=useState(null);
+  const[pintRaw,setPintRaw]=useState(null);
+
+  // Load from Supabase on mount
+  useEffect(()=>{
+    sbLoadAll().then(data=>{
+      if(data.meta)      setMetaRaw(data.meta);
+      if(data.shopify)   setShopifyRaw(data.shopify);
+      if(data.pinterest) setPintRaw(data.pinterest);
+      setLoading(false);
+    });
+  },[]);
+
+  const readRaw=(setter,type)=>file=>{
+    const r=new FileReader();
+    r.onload=async e=>{
+      const content=e.target.result;
+      setter(content);
+      setSaveStatus("saving");
+      await sbSave(type, content);
+      setSaveStatus("saved");
+      setTimeout(()=>setSaveStatus(""),2500);
+    };
+    r.readAsText(file,"UTF-8");
+  };
+
+  const meta     =useMemo(()=>metaRaw    ?parseMeta(metaRaw,dateFrom,dateTo)       :null,[metaRaw,dateFrom,dateTo]);
+  const shopify  =useMemo(()=>shopifyRaw ?parseShopify(shopifyRaw,dateFrom,dateTo) :null,[shopifyRaw,dateFrom,dateTo]);
+  const pinterest=useMemo(()=>pintRaw    ?parsePinterest(pintRaw)                  :null,[pintRaw]);
+
+  const TABS=[
+    {id:"consolidated",label:"Consolidado", color:T.violet,  dot:!!(meta||shopify)},
+    {id:"meta",        label:"Meta Ads",    color:T.meta,    dot:!!meta},
+    {id:"shopify",     label:"Shopify",     color:T.shopify, dot:!!shopify},
+    {id:"pinterest",   label:"Pinterest",   color:T.pinterest,dot:!!pinterest},
+    {id:"config",      label:"Campanha",    color:T.violet,  dot:false},
+  ];
+
+  if(loading) return(
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+      <GlobalStyles/>
+      <div style={{width:28,height:28,background:T.text,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{color:"#fff",fontSize:14,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>G</span>
+      </div>
+      <div style={{fontSize:12,color:T.muted,fontFamily:"'Syne',sans-serif",letterSpacing:"0.1em"}}>CARREGANDO DADOS...</div>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:T.bg}}>
+      <GlobalStyles/>
+      {saveStatus&&<div style={{position:"fixed",bottom:20,right:20,zIndex:999,background:saveStatus==="saved"?T.good:T.warn,color:"#fff",padding:"8px 16px",borderRadius:20,fontSize:11,fontWeight:700,fontFamily:"'Syne',sans-serif",boxShadow:"0 4px 12px rgba(0,0,0,0.15)"}}>
+        {saveStatus==="saving"?"Salvando...":"✓ Salvo no Supabase"}
+      </div>}
+
+      {/* Header */}
+      <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+        <div style={{maxWidth:1300,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"stretch",justifyContent:"space-between",height:52}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:28,height:28,background:T.text,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{color:"#fff",fontSize:14,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>G</span>
+            </div>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:"'Syne',sans-serif",letterSpacing:"-0.01em",lineHeight:1.1}}>Gallery Wall Mockups</div>
+              <div style={{fontSize:9,color:T.faint,letterSpacing:"0.1em",textTransform:"uppercase"}}>Performance Dashboard</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"stretch"}}>
+            {TABS.map(t=>(
+              <button key={t.id} onClick={()=>setTab(t.id)} style={{
+                background:"none",border:"none",cursor:"pointer",padding:"0 15px",
+                fontSize:11,fontWeight:tab===t.id?700:500,
+                color:tab===t.id?t.color:T.muted,
+                borderBottom:`2.5px solid ${tab===t.id?t.color:"transparent"}`,
+                transition:"all 0.15s",display:"flex",alignItems:"center",gap:5,
+                fontFamily:"'Syne',sans-serif",letterSpacing:"0.04em",whiteSpace:"nowrap",
+              }}>
                 {t.label}
-                {t.dot && (
-                  <span
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: "50%",
-                      background: t.color,
-                    }}
-                  />
-                )}
+                {t.dot&&<span style={{width:4,height:4,borderRadius:"50%",background:t.color,flexShrink:0}}/>}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1300, margin: "0 auto", padding: "26px 24px" }}>
-        {tab === "meta" && (
-          <MetaTab
-            meta={meta}
-            onMetaFile={readCsv((t) => setMeta(parseMeta(t)))}
-          />
-        )}
-        {tab === "shopify" && (
-          <ShopifyTab
-            shopifyOrders={shopifyOrders}
-            onOrdersFile={readCsv((t) =>
-              setShopifyOrders(parseShopifyOrders(t))
-            )}
-          />
-        )}
-        {tab === "pinterest" && (
-          <PinterestTab
-            pinterest={pinterest}
-            onPinterestFile={readCsv((t) => setPinterest(parsePinterest(t)))}
-          />
-        )}
-        {tab === "config" && <CampaignConfigTab />}
-        {tab === "consolidated" && (
-          <ConsolidatedTab
-            meta={meta}
-            shopifyOrders={shopifyOrders}
-            pinterest={pinterest}
-          />
-        )}
+      {/* Sub-header: period + rate */}
+      <div style={{background:"#ece7e0",borderBottom:`1px solid ${T.border}`,padding:"7px 24px"}}>
+        <div style={{maxWidth:1300,margin:"0 auto",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <PeriodSelector dateFrom={dateFrom} dateTo={dateTo} onFrom={setDateFrom} onTo={setDateTo}/>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:T.card,
+            border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px"}}>
+            <span style={{fontSize:10,color:T.muted,fontFamily:"'Syne',sans-serif",letterSpacing:"0.1em",textTransform:"uppercase"}}>US$1 =</span>
+            <span style={{fontSize:10,color:T.muted}}>R$</span>
+            <input type="number" step="0.01" min="1" value={dollarRate}
+              onChange={e=>setDollarRate(parseFloat(e.target.value)||5.85)}
+              style={{width:56,border:`1px solid ${T.border}`,borderRadius:5,padding:"3px 7px",
+                fontSize:11,color:T.text,background:T.bg,textAlign:"right"}}/>
+            <span style={{fontSize:10,color:T.faint}}>cotação p/ ROAS</span>
+          </div>
+          {meta&&<span style={{fontSize:10,color:T.muted,background:T.metaL,padding:"4px 10px",borderRadius:20,border:`1px solid ${T.meta}30`}}>
+            Meta: {meta.rowCount} linhas
+          </span>}
+          {shopify&&<span style={{fontSize:10,color:"#065f46",background:T.shopifyL,padding:"4px 10px",borderRadius:20,border:`1px solid ${T.shopify}30`}}>
+            Shopify: {shopify.totalOrders} pedidos
+          </span>}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{maxWidth:1300,margin:"0 auto",padding:"22px 24px"}}>
+        {tab==="consolidated"&&<ConsolidatedTab meta={meta} shopify={shopify} rate={dollarRate}/>}
+        {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} onFile={readRaw(setMetaRaw,"meta")}/>}
+        {tab==="shopify"     &&<ShopifyTab shopify={shopify} onFile={readRaw(setShopifyRaw,"shopify")}/>}
+        {tab==="pinterest"   &&<PinterestTab pinterest={pinterest} onFile={readRaw(setPintRaw,"pinterest")}/>}
+        {tab==="config"      &&<CampaignTab/>}
       </div>
     </div>
   );

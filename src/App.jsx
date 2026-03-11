@@ -467,11 +467,23 @@ function parseShopify(text, dateFrom, dateTo) {
       byMonth[m].orders++; byMonth[m].revenue+=o.total;
     }
     for(const item of o.items){
-      const key=item.name;
-      if(!byProduct[key])byProduct[key]={orders:0,qty:0,revenue:0,skus:new Set()};
-      byProduct[key].orders++; byProduct[key].qty+=item.qty; byProduct[key].revenue+=item.price*item.qty;
-      if(item.sku) byProduct[key].skus.add(item.sku);
-    }
+  const sku = (item.sku || "").trim();
+  const key = sku || item.name; // fallback só se vier sem SKU
+
+  if(!byProduct[key]){
+    byProduct[key]={
+      sku: sku || "—",
+      name: item.name || "—",
+      orders:0,
+      qty:0,
+      revenue:0,
+    };
+  }
+
+  byProduct[key].orders += 1;
+  byProduct[key].qty += item.qty;
+  byProduct[key].revenue += item.price * item.qty;
+}
   }
   // Convert sku Sets to arrays
   for(const p of Object.values(byProduct)) p.skus=[...p.skus];

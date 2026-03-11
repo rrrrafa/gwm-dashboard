@@ -443,8 +443,9 @@ function parseShopify(text, dateFrom, dateTo) {
   const byCountry={},byDay={},byProduct={},byMonth={};
 
   for(const o of Object.values(orders)){
-    if(o.total===0)continue; // skip freebies
-    totalOrders++; totalRevenue+=o.total;
+    // Count ALL fulfilled orders (including $0 / 100% coupon / free downloads)
+    totalOrders++;
+    totalRevenue+=o.total; // $0 orders add 0 to revenue — correct
     if(!byCountry[o.country])byCountry[o.country]={orders:0,revenue:0};
     byCountry[o.country].orders++; byCountry[o.country].revenue+=o.total;
     if(o.date){
@@ -467,17 +468,48 @@ function parseShopify(text, dateFrom, dateTo) {
     avgTicket:totalOrders>0?totalRevenue/totalOrders:0 };
 }
 
+// Pinterest country name → ISO code mapping
+const PINTEREST_COUNTRY_MAP={
+  "United States":"US","U.S.":"US","USA":"US",
+  "United Kingdom":"GB","UK":"GB",
+  "Germany":"DE","Spain":"ES","France":"FR",
+  "Netherlands":"NL","Ireland":"IE","Italy":"IT",
+  "Portugal":"PT","Romania":"RO","Poland":"PL",
+  "Sweden":"SE","Norway":"NO","Denmark":"DK",
+  "Switzerland":"CH","Austria":"AT","Belgium":"BE",
+  "Canada":"CA","Australia":"AU","Brazil":"BR",
+  "Mexico":"MX","Argentina":"AR","South Africa":"ZA","SA":"ZA",
+  "Saudi Arabia":"SA","Singapore":"SG","India":"IN",
+  "Japan":"JP","New Zealand":"NZ",
+};
+function normalizePinterestCountry(raw){
+  if(!raw)return"—";
+  const up=raw.trim().toUpperCase();
+  if(CDATA[up])return up;
+  return PINTEREST_COUNTRY_MAP[raw.trim()]||raw.trim().toUpperCase().slice(0,2);
+}
+
 function parsePinterest(text){
   const{data}=Papa.parse(text,{header:true,skipEmptyLines:true});
   const totals={impressions:0,clicks:0,saves:0,spend:0,conversions:0};
-  const byPin={};
+  const byPin={}, byCountry={};
   for(const r of data){
     const impr=getNum(r,["impressions","impressões"]);
-    const clicks=getNum(r,["link clicks","clicks","cliques"]);
+    const clicks=getNum(r,["link clicks","pin clicks","clicks","cliques","outbound clicks"]);
     const saves=getNum(r,COL.saves);
-    const spend=getNum(r,COL.spend);
-    const conv=getNum(r,["checkouts","conversions","purchases","compras"]);
+    const spend=getNum(r,["spend","gasto","amount spent","valor usado"]);
+    const conv=getNum(r,["total conversions (checkout)","total conversions (purchase)","checkouts","conversions","purchases","compras"]);
     const name=getStr(r,["ad name","pin name","nome do anúncio","name"]);
+    // Country from "Targeting Value" col (country-level report) or "Country" col
+    const rawCountry=r["Targeting Value"]||r["Country"]||r["País"]||"";
+    const country=normalizePinterestCountry(rawCountry);
+    if(country!=="—"&&country.length===2){
+      if(!byCountry[country])byCountry[country]={impressions:0,clicks:0,spend:0,conversions:0};
+      byCountry[country].impressions+=impr;
+      byCountry[country].clicks+=clicks;
+      byCountry[country].spend+=spend;
+      byCountry[country].conversions+=conv;
+    }
     totals.impressions+=impr;totals.clicks+=clicks;totals.saves+=saves;
     totals.spend+=spend;totals.conversions+=conv;
     if(name!=="—"){
@@ -488,7 +520,7 @@ function parsePinterest(text){
   }
   totals.ctr=totals.impressions>0?(totals.clicks/totals.impressions)*100:0;
   totals.cpa=totals.conversions>0?totals.spend/totals.conversions:0;
-  return{totals,byPin};
+  return{totals,byPin,byCountry};
 }
 
 /* ─── DAILY CHART DATA ───────────────────────────────────── */
@@ -591,6 +623,18 @@ function buildSuggestions(meta, shopify, rate){
       out.push({type:"good",title:`${fmtPct(organicPct)} das vendas são orgânicas`,msg:`${totalOrganic} de ${shopify.totalOrders} pedidos sem atribuição Meta. Forte presença orgânica — considere investir em SEO/Pinterest.`});
   }
 
+  // Pinterest
+  if(pinterest){
+    const ptotal=pinterest.totals;
+    if(ptotal.spend>0&&ptotal.impressions>0){
+      const cpm=ptotal.impressions>0?(ptotal.spend/ptotal.impressions)*1000:0;
+      out.push({type:"good",title:`Pinterest ativo: ${fmt(ptotal.impressions)} impressões`,msg:`Gasto $${ptotal.spend.toFixed(2)} · CPM $${cpm.toFixed(2)} · ${fmt(ptotal.clicks)} cliques. Sem vendas atribuídas ainda — canal de topo de funil e brand awareness. Monitore tráfego orgânico via Shopify vs Meta Δ.`});
+    }
+    if(ptotal.spend>0&&ptotal.conversions===0){
+      out.push({type:"info",title:"Pinterest sem conversões diretas",msg:`Normal em fase inicial. Pinterest influencia compras com delay maior que Meta (~7-14 dias). Compare "Ped. Shop" vs "Comp. Meta" por país na aba Consolidado para identificar impacto indireto.`});
+    }
+  }
+
   return out;
 }
 
@@ -651,8 +695,19 @@ function DataTable({cols,rows,sort,onSort,emptyMsg}){
     <div style={{overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse"}}>
         <thead><tr>{cols.map(c=>(
-          <th key={c.key} style={{...TH,textAlign:c.align||"right"}} onClick={()=>onSort(c.key)}>
-            {c.label}{sort?.key===c.key?(sort.dir==="desc"?" ↓":" ↑"):""}
+          <th key={c.key} style={{...TH,textAlign:c.align||"right",
+            color:sort?.key===c.key?T.violet:T.muted,
+            borderBottom:sort?.key===c.key?`2px solid ${T.violet}`:`1px solid ${T.border}`}}
+            onClick={()=>onSort(c.key)}>
+            <span style={{display:"inline-flex",alignItems:"center",gap:3,cursor:c.tip?"help":"pointer"}}
+              title={c.tip||""}>
+              {c.icon&&<span style={{opacity:0.6}}>{c.icon}</span>}
+              {c.label}
+              {sort?.key===c.key?(sort.dir==="desc"?" ↓":" ↑"):""}
+              {c.tip&&<span style={{width:11,height:11,borderRadius:"50%",background:T.faint,color:"#fff",
+                fontSize:7,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center",
+                flexShrink:0,lineHeight:1,opacity:0.7}}>?</span>}
+            </span>
           </th>
         ))}</tr></thead>
         <tbody>{rows.map((row,i)=>(
@@ -863,16 +918,18 @@ function DailyChart({data}){
 }
 
 /* ─── COUNTRY CROSSOVER ──────────────────────────────────── */
-function CountryCrossover({meta,shopify,rate}){
+function CountryCrossover({meta,shopify,pinterest,rate}){
   const[view,setView]=useState("roas"); // "roas" | "funnel"
   const rows=useMemo(()=>{
     const countries=new Set([
       ...Object.keys(meta?.byCountry||{}),
-      ...Object.keys(shopify?.byCountry||{})
+      ...Object.keys(shopify?.byCountry||{}),
+      ...Object.keys(pinterest?.byCountry||{})
     ]);
     return Array.from(countries).map(c=>{
       const m=meta?.byCountry[c]||{};
       const s=shopify?.byCountry[c]||{};
+      const p=pinterest?.byCountry[c]||{};
       const revUSD=s.revenue||0;
       const revBRL=revUSD*rate;
       const metaP=m.purchases||0;
@@ -950,7 +1007,7 @@ function CountryCrossover({meta,shopify,rate}){
       {view==="funnel"&&(
         <DataTable sort={sort} onSort={onSort}
           cols={[
-            {key:"country",      label:"País",        align:"left", render:v=><span style={{fontWeight:700,fontSize:11,color:T.text,whiteSpace:"nowrap"}}>{fmtCountry(v)}</span>},
+            {key:"country",      label:"País",        align:"left", tip:"País (ISO 2 letras)", render:v=><span style={{fontWeight:700,fontSize:11,color:T.text,whiteSpace:"nowrap"}}>{fmtCountry(v)}</span>},
             {key:"metaImpr",     label:"Impressões",  render:v=>fmt(v)},
             {key:"metaClicks",   label:"Cliques",     render:v=>fmt(v)},
             {key:"ctr",          label:"CTR",         render:v=>fmtPct(v), color:v=>v>=2?T.good:v>=0.5?T.warn:v>0?T.bad:T.faint},
@@ -973,7 +1030,7 @@ function CountryCrossover({meta,shopify,rate}){
 }
 
 /* ─── SUGGESTIONS PANEL ──────────────────────────────────── */
-function SuggestionsPanel({meta,shopify,rate}){
+function SuggestionsPanel({meta,shopify,pinterest,rate}){
   const items=useMemo(()=>buildSuggestions(meta,shopify,rate),[meta,shopify,rate]);
   if(!items.length)return null;
   const icon={good:"✓",bad:"✗",warn:"⚠",action:"→"};
@@ -1392,18 +1449,7 @@ function MonthlyView({meta,shopify,rate}){
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {[["month","Mês","left"],["spend","Gasto Meta","right"],["purchases","Comp. Meta","right"],
-                ["shopifyOrders","Ped. Shop","right"],["revUSD","Rec. USD","right"],
-                ["revBRL","Rec. BRL","right"],["roas","ROAS","right"],
-                ["cpa","CPA","right"],["lpv","LPV","right"]].map(([k,l,a])=>(
-                <th key={k} onClick={()=>onSort(k)} style={{
-                  padding:"8px 12px",fontSize:9,fontWeight:700,color:sort.key===k?T.violet:T.muted,
-                  letterSpacing:"0.1em",textTransform:"uppercase",textAlign:a||"right",cursor:"pointer",
-                  background:"#faf8f5",borderBottom:`2px solid ${sort.key===k?T.violet:T.border}`,
-                  whiteSpace:"nowrap",fontFamily:"'Syne',sans-serif"}}>
-                  {l}{sort.key===k?(sort.dir==="asc"?" ↑":" ↓"):""}
-                </th>
-              ))}
+              {(()=>{const MTIPS={"M\u00eas": "", "Gasto Meta": "Total gasto no Meta Ads no per\u00edodo", "Comp. Meta": "Compras atribu\u00eddas pelo Meta (pixel). Pode incluir view-through attribution", "Ped. Shop": "Pedidos reais registrados no Shopify (inclui org\u00e2nico, Pinterest, direto)", "Rec. USD": "Receita bruta em d\u00f3lares (Shopify)", "Rec. BRL": "Receita bruta convertida para BRL usando a cota\u00e7\u00e3o configurada", "ROAS": "Return on Ad Spend \u2014 Rec. BRL \u00f7 Gasto Meta. Acima de 3\u00d7 \u00e9 saud\u00e1vel", "CPA": "Custo Por Aquisi\u00e7\u00e3o \u2014 gasto \u00f7 compras Meta atribu\u00eddas", "LPV": "Landing Page Views \u2014 cliques que carregaram a p\u00e1gina"};return [["month","Mês","left"],["spend","Gasto Meta","right"],["purchases","Comp. Meta","right"],["shopifyOrders","Ped. Shop","right"],["revUSD","Rec. USD","right"],["revBRL","Rec. BRL","right"],["roas","ROAS","right"],["cpa","CPA","right"],["lpv","LPV","right"]].map(([k,l,a])=>{const tip=MTIPS[l]||"";return(<th key={k} onClick={()=>onSort(k)} title={tip||undefined} style={{padding:"8px 12px",fontSize:9,fontWeight:700,color:sort.key===k?T.violet:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",textAlign:a||"right",cursor:tip?"help":"pointer",background:"#faf8f5",borderBottom:`2px solid ${sort.key===k?T.violet:T.border}`,whiteSpace:"nowrap",fontFamily:"'Syne',sans-serif"}}><span style={{display:"inline-flex",alignItems:"center",gap:3}}>{l}{sort.key===k?(sort.dir==="asc"?" ↑":" ↓"):""}{tip&&<span style={{width:11,height:11,borderRadius:"50%",background:T.faint,color:"#fff",fontSize:7,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1,opacity:0.7}}>?</span>}</span></th>);});})()} 
             </tr>
           </thead>
           <tbody>
@@ -1451,7 +1497,7 @@ function MonthlyView({meta,shopify,rate}){
 }
 
 /* ─── TAB: CONSOLIDADO ───────────────────────────────────── */
-function ConsolidatedTab({meta,shopify,rate,fee=6.8}){
+function ConsolidatedTab({meta,shopify,pinterest,rate,fee=6.8}){
   const dailyData=useMemo(()=>buildDailyData(meta?.byDay,shopify?.byDay,rate),[meta,shopify,rate]);
   const roasGlobal=meta?.totals.spend>0&&shopify?(shopify.totalRevenue*rate)/meta.totals.spend:0;
   const roasDays=dailyData.filter(d=>d.roas!==null);
@@ -1491,10 +1537,10 @@ function ConsolidatedTab({meta,shopify,rate,fee=6.8}){
         <DailyAttributionTable meta={meta} shopify={shopify} rate={rate}/>
       </Collapsible>
       <Collapsible title="Meta × Shopify por País" color={T.violet} id="country-cross">
-        <CountryCrossover meta={meta} shopify={shopify} rate={rate}/>
+        <CountryCrossover meta={meta} shopify={shopify} pinterest={pinterest} rate={rate}/>
       </Collapsible>
       <Collapsible title="Insights & Sugestões" color={T.warn} id="insights">
-        <SuggestionsPanel meta={meta} shopify={shopify} rate={rate}/>
+        <SuggestionsPanel meta={meta} shopify={shopify} pinterest={pinterest} rate={rate}/>
       </Collapsible>
     </div>
   );
@@ -1934,8 +1980,21 @@ function ShopifyTab({shopify,onFile,productImages,onProductImageUpload}){
               <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
                 <DataTable sort={sortP} onSort={onSP}
                   cols={[
-                    {key:"name",   label:"Produto", align:"left", render:v=><span style={{maxWidth:300,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500,color:T.text}}>{v}</span>},
-                    {key:"orders", label:"Vendas",  render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
+                    {key:"name", label:"Produto", align:"left", render:(v,row)=>(
+                      <div style={{display:"flex",alignItems:"center",gap:9}}>
+                        <CreativeImageCell adName={"prod_"+v} images={productImages||{}} onUpload={onProductImageUpload||((n,f)=>{})}/>
+                        <div>
+                          <div title={v} style={{maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",
+                            whiteSpace:"nowrap",fontWeight:600,fontSize:11,color:T.text}}>{v}</div>
+                          {row.skus?.length>0&&(
+                            <div style={{fontSize:9,color:T.faint,marginTop:1}}>{row.skus.join(" · ")}</div>
+                          )}
+                        </div>
+                      </div>
+                    )},
+                    {key:"orders",  label:"Pedidos", render:v=>fmt(v),   color:v=>v>0?T.shopify:T.faint},
+                    {key:"qty",     label:"Itens",   render:v=>fmt(v||0), color:v=>v>0?T.shopify:T.faint},
+                    {key:"revenue", label:"Rec. USD",render:v=>v>0?fmtUSD(v):"—", color:v=>v>0?T.good:T.faint},
                   ]}
                   rows={sP}/>
               </div>
@@ -2506,6 +2565,20 @@ function FinancialTab({meta,shopify,rate,fee=6.8}){
     <div>
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12,marginBottom:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,background:T.card,
+          border:`1px solid ${T.border}`,borderRadius:9,padding:"10px 14px"}}>
+          <div>
+            <div style={{fontSize:8,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",
+              fontFamily:"'Syne',sans-serif",marginBottom:2}}>Taxa Stripe</div>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <input type="number" step="0.1" min="0" max="25" value={fee}
+                onChange={e=>setFeeLocal(parseFloat(e.target.value)||0)}
+                style={{width:48,border:`1px solid ${T.border}`,borderRadius:5,padding:"3px 7px",
+                  fontSize:13,fontWeight:700,color:T.text,background:T.bg,textAlign:"right"}}/>
+              <span style={{fontSize:11,color:T.muted}}>%</span>
+            </div>
+          </div>
+        </div>
         <KPI label="Receita Bruta (BRL)" value={fmtR(shopifyRevBRL)} accent={T.shopify}/>
         <KPI label="Receita Líq. (BRL)" value={fmtR(shopifyRevNet)} accent={T.good}
           sub={`após ${fee}% Stripe`} large/>
@@ -2870,15 +2943,6 @@ export default function App(){
                 fontSize:11,color:T.text,background:T.bg,textAlign:"right"}}/>
             <span style={{fontSize:10,color:T.faint}}>cotação p/ ROAS</span>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,background:T.card,
-            border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px"}}>
-            <span style={{fontSize:10,color:T.muted,fontFamily:"'Syne',sans-serif",letterSpacing:"0.1em",textTransform:"uppercase"}}>Stripe</span>
-            <input type="number" step="0.1" min="0" max="20" value={stripeFee}
-              onChange={e=>setStripeFee(parseFloat(e.target.value)||6.8)}
-              style={{width:44,border:`1px solid ${T.border}`,borderRadius:5,padding:"3px 7px",
-                fontSize:11,color:T.text,background:T.bg,textAlign:"right"}}/>
-            <span style={{fontSize:10,color:T.faint}}>% fee</span>
-          </div>
           {meta&&<span style={{fontSize:10,color:T.muted,background:T.metaL,padding:"4px 10px",borderRadius:20,border:`1px solid ${T.meta}30`}}>
             Meta: {meta.rowCount} linhas
           </span>}
@@ -2897,7 +2961,7 @@ export default function App(){
 
       {/* Content */}
       <div style={{maxWidth:1300,margin:"0 auto",padding:"22px 24px"}}>
-        {tab==="consolidated"&&<ConsolidatedTab meta={meta} shopify={shopify} rate={dollarRate} fee={stripeFee}/>}
+        {tab==="consolidated"&&<ConsolidatedTab meta={meta} shopify={shopify} pinterest={pinterest} rate={dollarRate} fee={stripeFee}/>}
         {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} fee={stripeFee} onFile={readRaw(setMetaRaw,"meta")} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
         {tab==="shopify"     &&<ShopifyTab shopify={shopify} onFile={readRaw(setShopifyRaw,"shopify")}
           productImages={productImages}

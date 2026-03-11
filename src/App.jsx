@@ -977,16 +977,8 @@ function DailyAttributionTable({meta, shopify, rate}){
 
 
 /* ─── COLLAPSIBLE SECTION ────────────────────────────────── */
-const LS_KEY = "gwm_widgets_v1";
-function lsGet(id, def) {
-  try { const s=localStorage.getItem(LS_KEY); if(!s)return def; const p=JSON.parse(s); return p[id]??def; } catch{ return def; }
-}
-function lsSet(id, val) {
-  try { const s=localStorage.getItem(LS_KEY); const p=s?JSON.parse(s):{}; p[id]=val; localStorage.setItem(LS_KEY,JSON.stringify(p)); } catch{}
-}
-
 function Collapsible({title, color, children, defaultOpen=true, id=null, extra=null}){
-  const storageId = id || title;
+  const storageId = "col_"+(id||title);
   const[open,setOpen]=useState(()=>lsGet(storageId, defaultOpen));
 
   const toggle=()=>{

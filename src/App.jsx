@@ -714,7 +714,6 @@ function CountryCrossover({meta,shopify,rate}){
             </button>
           ))}
         </div>
-        </div>
       </div>
       {view==="roas"&&(
         <DataTable sort={sort} onSort={onSort}

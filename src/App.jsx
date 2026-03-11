@@ -44,12 +44,12 @@ async function sbUploadCreative(adName, file) {
   } catch(e) { console.warn('sbUploadCreative', e); return null; }
 }
 
-async function sbLoadCreativeImages() {
+async function sbLoadCreativeImages(prefix="") {
   try {
     const res = await fetch(`${SB_URL}/storage/v1/object/list/creatives`, {
       method: 'POST',
       headers: { ...sbH, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefix: '', limit: 200 }),
+      body: JSON.stringify({ prefix, limit: 500 }),
     });
     if (!res.ok) return {};
     const files = await res.json();
@@ -101,6 +101,71 @@ async function sbUpdateExpense(id, patch) {
   } catch(e) {}
 }
 
+async function sbLoadLeads(){
+  try{
+    const res=await fetch(`${SB_URL}/rest/v1/leads?select=*&order=date.desc`,{headers:sbH});
+    if(!res.ok)return[];
+    return await res.json();
+  }catch{return[];}
+}
+async function sbAddLead(lead){
+  try{
+    const res=await fetch(`${SB_URL}/rest/v1/leads`,{
+      method:"POST",headers:{...sbH,"Prefer":"return=representation"},
+      body:JSON.stringify(lead),
+    });
+    if(!res.ok){console.warn(await res.text());return null;}
+    const rows=await res.json(); return rows[0];
+  }catch{return null;}
+}
+async function sbDeleteLead(id){
+  try{ await fetch(`${SB_URL}/rest/v1/leads?id=eq.${id}`,{method:"DELETE",headers:sbH}); }catch{}
+}
+async function sbUpdateLead(id,patch){
+  try{ await fetch(`${SB_URL}/rest/v1/leads?id=eq.${id}`,{
+    method:"PATCH",headers:{...sbH,"Prefer":"return=representation"},body:JSON.stringify(patch),
+  }); }catch{}
+}
+
+/* ─── CSV MERGE ──────────────────────────────────────────── */
+function mergeMetaCsv(existing, incoming){
+  // Parse both, deduplicate by date+ad+country key, return merged CSV
+  const parseRows=(text)=>{
+    const{data,meta:m}=Papa.parse(text,{header:true,skipEmptyLines:true});
+    return{rows:data,fields:m.fields||[]};
+  };
+  try{
+    const {rows:oldRows,fields}=parseRows(existing||"");
+    const {rows:newRows}=parseRows(incoming);
+    const allFields=[...new Set([...fields,...(Papa.parse(incoming,{header:true,skipEmptyLines:true}).meta.fields||[])])];
+    const map={};
+    const key=r=>{
+      const d=r["Início dos relatórios"]||r["Reporting starts"]||r["Date"]||"";
+      const n=r["Nome do anúncio"]||r["Ad name"]||r["Anúncio"]||"";
+      const co=r["País"]||r["Country"]||"";
+      return d+"__"+n+"__"+co;
+    };
+    for(const r of oldRows) map[key(r)]=r;
+    for(const r of newRows) map[key(r)]=r; // newer overwrites older for same key
+    const merged=Object.values(map);
+    return Papa.unparse(merged,{columns:allFields});
+  }catch(e){ return incoming; } // fallback: just use new
+}
+
+function mergeShopifyCsv(existing, incoming){
+  try{
+    const parse=(t)=>Papa.parse(t,{header:true,skipEmptyLines:true});
+    const {data:oldRows,meta:om}=parse(existing||"");
+    const {data:newRows,meta:nm}=parse(incoming);
+    const allFields=[...new Set([...(om.fields||[]),...(nm.fields||[])])];
+    const map={};
+    for(const r of oldRows) if(r["Name"])map[r["Name"]]=r;
+    for(const r of newRows) if(r["Name"])map[r["Name"]]=r;
+    return Papa.unparse(Object.values(map),{columns:allFields});
+  }catch(e){ return incoming; }
+}
+
+
 /* ─── SESSION PERSISTENCE ────────────────────────────────── */
 const LS_KEY = "gwm_session_v2";
 function lsGet(key, def){
@@ -109,6 +174,61 @@ function lsGet(key, def){
 }
 function lsSet(key, val){
   try{ localStorage.setItem(key, JSON.stringify(val)); }catch{}
+}
+
+
+/* ─── COUNTRY DATA ───────────────────────────────────────── */
+const CDATA={
+  GB:{flag:"🇬🇧",name:"Reino Unido",   aliases:["United Kingdom","UK","England"]},
+  DE:{flag:"🇩🇪",name:"Alemanha",      aliases:["Germany"]},
+  ES:{flag:"🇪🇸",name:"Espanha",       aliases:["Spain"]},
+  FR:{flag:"🇫🇷",name:"França",        aliases:["France"]},
+  NL:{flag:"🇳🇱",name:"Holanda",       aliases:["Netherlands","Holland"]},
+  US:{flag:"🇺🇸",name:"EUA",           aliases:["United States","USA"]},
+  IE:{flag:"🇮🇪",name:"Irlanda",       aliases:["Ireland"]},
+  IT:{flag:"🇮🇹",name:"Itália",        aliases:["Italy"]},
+  PT:{flag:"🇵🇹",name:"Portugal",      aliases:["Portugal"]},
+  AU:{flag:"🇦🇺",name:"Austrália",     aliases:["Australia"]},
+  CA:{flag:"🇨🇦",name:"Canadá",        aliases:["Canada"]},
+  BR:{flag:"🇧🇷",name:"Brasil",        aliases:["Brazil"]},
+  RO:{flag:"🇷🇴",name:"Romênia",       aliases:["Romania"]},
+  PL:{flag:"🇵🇱",name:"Polônia",       aliases:["Poland"]},
+  SE:{flag:"🇸🇪",name:"Suécia",        aliases:["Sweden"]},
+  NO:{flag:"🇳🇴",name:"Noruega",       aliases:["Norway"]},
+  DK:{flag:"🇩🇰",name:"Dinamarca",     aliases:["Denmark"]},
+  CH:{flag:"🇨🇭",name:"Suíça",         aliases:["Switzerland"]},
+  AT:{flag:"🇦🇹",name:"Áustria",       aliases:["Austria"]},
+  BE:{flag:"🇧🇪",name:"Bélgica",       aliases:["Belgium"]},
+  MX:{flag:"🇲🇽",name:"México",        aliases:["Mexico"]},
+  AR:{flag:"🇦🇷",name:"Argentina",     aliases:["Argentina"]},
+  ZA:{flag:"🇿🇦",name:"África do Sul", aliases:["South Africa"]},
+  SG:{flag:"🇸🇬",name:"Singapura",     aliases:["Singapore"]},
+  IN:{flag:"🇮🇳",name:"Índia",         aliases:["India"]},
+  JP:{flag:"🇯🇵",name:"Japão",         aliases:["Japan"]},
+  NZ:{flag:"🇳🇿",name:"Nova Zelândia", aliases:["New Zealand"]},
+};
+
+// Build reverse map: full name → ISO code
+const COUNTRY_NAME_TO_CODE={};
+for(const[code,d] of Object.entries(CDATA)){
+  COUNTRY_NAME_TO_CODE[code]=code; // code → code
+  for(const a of d.aliases) COUNTRY_NAME_TO_CODE[a.toLowerCase()]=code;
+  COUNTRY_NAME_TO_CODE[d.name.toLowerCase()]=code;
+}
+
+function normalizeCountry(raw){
+  if(!raw||raw==="—")return"—";
+  const up=raw.trim().toUpperCase();
+  if(CDATA[up])return up; // already ISO
+  const lo=raw.trim().toLowerCase();
+  return COUNTRY_NAME_TO_CODE[lo]||raw.trim().toUpperCase();
+}
+
+function fmtCountry(code,mode="full"){
+  const d=CDATA[code];
+  if(!d)return code||"—";
+  if(mode==="flag")return d.flag+" "+code;
+  return d.flag+" "+d.name+" ("+code+")";
 }
 
 
@@ -211,7 +331,7 @@ function parseMeta(text, dateFrom, dateTo) {
   });
 
   const totals = { reach:0,impressions:0,frequency:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0 };
-  const byCreative={}, byCountry={}, byCampaign={}, byDay={}, byMonth={}, byObjective={};
+  const byCreative={}, byCountry={}, byCampaign={}, byDay={}, byMonth={}, byObjective={}, byCampaignMonth={};
   let freqCount=0; // rows with frequency data for averaging
 
   for (const r of rows) {
@@ -222,7 +342,7 @@ function parseMeta(text, dateFrom, dateTo) {
     const spend=getNum(r,COL.spend), clicks=getNum(r,COL.clicks);
     const cpcDirect=getNum(r,COL.cpcMeta); // CPC direto do Meta (mais confiável)
     const adName=getStr(r,COL.adName), campaign=getStr(r,COL.campaign);
-    const adset=getStr(r,COL.adset), country=getStr(r,COL.country);
+    const adset=getStr(r,COL.adset), country=normalizeCountry(getStr(r,COL.country));
     const dateStr=getStr(r,COL.date).slice(0,10);
     const monthStr=dateStr.slice(0,7); // "2026-02"
 
@@ -248,7 +368,18 @@ function parseMeta(text, dateFrom, dateTo) {
       if(cpcDirect>0) m._cpcSum=(m._cpcSum||0)+cpcDirect, m._cpcCount=(m._cpcCount||0)+1;
     };
     add(byCreative, adName,   ()=>({campaign,adset,reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0}));
-    add(byCampaign, campaign, ()=>({reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0}));
+    add(byCampaign, campaign, ()=>({reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0,dates:[]}));
+    if(campaign!=="—"&&dateStr&&dateStr!=="—"){
+      if(!byCampaign[campaign].dates.includes(dateStr)) byCampaign[campaign].dates.push(dateStr);
+    }
+    // Campaign × Month
+    if(campaign!=="—"&&monthStr&&monthStr.length===7){
+      const cmKey=campaign+"||"+monthStr;
+      if(!byCampaignMonth[cmKey])byCampaignMonth[cmKey]={campaign,month:monthStr,spend:0,purchases:0,impressions:0,lpv:0,clicks:0,addCart:0};
+      byCampaignMonth[cmKey].spend+=spend; byCampaignMonth[cmKey].purchases+=purchases;
+      byCampaignMonth[cmKey].impressions+=impressions; byCampaignMonth[cmKey].lpv+=lpv;
+      byCampaignMonth[cmKey].clicks+=clicks; byCampaignMonth[cmKey].addCart+=addCart;
+    }
     const obj=detectObjective(campaign);
     add(byObjective, obj, ()=>({reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0,campaigns:new Set()}));
     if(byObjective[obj]&&campaign!=="—") byObjective[obj].campaigns.add(campaign);
@@ -283,7 +414,7 @@ function parseMeta(text, dateFrom, dateTo) {
   totals.hasCheckout=totals.checkout>0;
   // Convert campaigns Sets to arrays for serialization
   for(const obj of Object.values(byObjective)) obj.campaigns=[...obj.campaigns];
-  return { totals, byCreative, byCountry, byCampaign, byDay, byMonth, byObjective, rowCount:rows.length };
+  return { totals, byCreative, byCountry, byCampaign, byCampaignMonth, byDay, byMonth, byObjective, rowCount:rows.length };
 }
 
 function parseShopify(text, dateFrom, dateTo) {
@@ -297,13 +428,15 @@ function parseShopify(text, dateFrom, dateTo) {
     if(!orders[name]){
       orders[name]={
         date:created,
-        country:r["Billing Country"]||r["Shipping Country"]||"—",
+        country:normalizeCountry(r["Billing Country"]||r["Shipping Country"]||"—"),
         total:parseFloat(r["Total"]||"0")||0,
         status:r["Financial Status"]||"",
         items:[],
       };
     }
-    if(r["Lineitem name"])orders[name].items.push(r["Lineitem name"]);
+    if(r["Lineitem name"]){
+      orders[name].items.push({name:r["Lineitem name"],sku:r["Lineitem sku"]||r["SKU"]||"",qty:parseInt(r["Lineitem quantity"]||"1")||1,price:parseFloat(r["Lineitem price"]||"0")||0});
+    }
   }
 
   let totalOrders=0,totalRevenue=0;
@@ -322,10 +455,14 @@ function parseShopify(text, dateFrom, dateTo) {
       byMonth[m].orders++; byMonth[m].revenue+=o.total;
     }
     for(const item of o.items){
-      if(!byProduct[item])byProduct[item]={orders:0};
-      byProduct[item].orders++;
+      const key=item.name;
+      if(!byProduct[key])byProduct[key]={orders:0,qty:0,revenue:0,skus:new Set()};
+      byProduct[key].orders++; byProduct[key].qty+=item.qty; byProduct[key].revenue+=item.price*item.qty;
+      if(item.sku) byProduct[key].skus.add(item.sku);
     }
   }
+  // Convert sku Sets to arrays
+  for(const p of Object.values(byProduct)) p.skus=[...p.skus];
   return { totalOrders, totalRevenue, byCountry, byDay, byMonth, byProduct,
     avgTicket:totalOrders>0?totalRevenue/totalOrders:0 };
 }
@@ -797,7 +934,7 @@ function CountryCrossover({meta,shopify,rate}){
       {view==="roas"&&(
         <DataTable sort={sort} onSort={onSort}
           cols={[
-            {key:"country",      label:"País",          align:"left", render:v=><b style={{color:T.text,fontSize:12}}>{v}</b>},
+            {key:"country",      label:"País",          align:"left", render:v=><span style={{fontWeight:700,fontSize:11,color:T.text,whiteSpace:"nowrap"}}>{fmtCountry(v)}</span>},
             {key:"metaSpend",    label:"Gasto Meta",    render:v=>fmtR(v)},
             {key:"metaPurchases",label:"Comp. Meta",    render:v=>fmt(v), color:v=>v>0?T.meta:T.faint},
             {key:"shopifyOrders",label:"Ped. Shop",     render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
@@ -813,13 +950,13 @@ function CountryCrossover({meta,shopify,rate}){
       {view==="funnel"&&(
         <DataTable sort={sort} onSort={onSort}
           cols={[
-            {key:"country",      label:"País",        align:"left", render:v=><b style={{color:T.text,fontSize:12}}>{v}</b>},
+            {key:"country",      label:"País",        align:"left", render:v=><span style={{fontWeight:700,fontSize:11,color:T.text,whiteSpace:"nowrap"}}>{fmtCountry(v)}</span>},
             {key:"metaImpr",     label:"Impressões",  render:v=>fmt(v)},
             {key:"metaClicks",   label:"Cliques",     render:v=>fmt(v)},
             {key:"ctr",          label:"CTR",         render:v=>fmtPct(v), color:v=>v>=2?T.good:v>=0.5?T.warn:v>0?T.bad:T.faint},
             {key:"cpm",          label:"CPM",         render:v=>fmtR(v), color:v=>v>0&&v<30?T.good:v<60?T.warn:v>0?T.bad:T.faint},
             {key:"metaLPV",      label:"LPV",         render:v=>fmt(v)},
-            {key:"metaCheckout", label:"Checkout",    render:v=>fmt(v)},
+            {key:"metaCheckout", label:"Fin. Carrinho",    render:v=>fmt(v)},
             {key:"metaPurchases",label:"Compras",     render:v=>fmt(v), color:v=>v>0?T.meta:T.faint},
             {key:"cpa",          label:"CPA",         render:v=>v>0?fmtR(v):"—"},
             {key:"cvr",          label:"CVR",         render:v=>fmtPct(v), color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
@@ -972,6 +1109,43 @@ function DailyAttributionTable({meta, shopify, rate}){
         <b style={{color:T.good}}>ROAS</b> = receita Shopify convertida em BRL ÷ gasto Meta no mesmo dia.
       </div>
     </div>
+  );
+}
+
+
+/* ─── METRIC TOOLTIP ─────────────────────────────────────── */
+const METRIC_TIPS={
+  "ROAS":"Return on Ad Spend — Receita BRL ÷ Gasto Meta. Acima de 3× é bom para produtos digitais.",
+  "CPA":"Custo Por Aquisição — gasto ÷ compras atribuídas pelo Meta.",
+  "CTR":"Click-Through Rate — cliques no link ÷ impressões × 100. Acima de 1% é saudável.",
+  "CPM":"Custo por Mil Impressões — mede custo de alcance. Menor = audiência mais barata.",
+  "LPV":"Landing Page Views — pessoas que clicaram E a página carregou. Mais preciso que cliques.",
+  "CVR":"Conversion Rate — compras ÷ LPV × 100. Mede eficiência da página de destino.",
+  "Freq.":"Frequência — média de vezes que a mesma pessoa viu seu anúncio. Acima de 3× pode cansar a audiência.",
+  "Alcance":"Número de pessoas únicas que viram o anúncio (diferente de impressões).",
+  "Fin. Carrinho":"Finalizações de carrinho iniciadas (checkout initiation) — usuários que clicaram em 'comprar'.",
+  "ROAS Real":"ROAS calculado com TODOS os gastos (mídia + despesas manuais) ÷ receita líquida Shopify.",
+  "Rec. Líq.":"Receita Shopify após descontar as taxas da Stripe (processing + currency conversion).",
+};
+function MetricTip({term}){
+  const[show,setShow]=useState(false);
+  const tip=METRIC_TIPS[term];
+  if(!tip)return null;
+  return(
+    <span style={{position:"relative",display:"inline-flex",alignItems:"center",marginLeft:3}}>
+      <span onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}
+        style={{width:13,height:13,borderRadius:"50%",background:T.faint,color:"#fff",
+          fontSize:8,fontWeight:700,display:"inline-flex",alignItems:"center",
+          justifyContent:"center",cursor:"help",flexShrink:0,lineHeight:1}}>?</span>
+      {show&&(
+        <div style={{position:"absolute",bottom:"120%",left:"50%",transform:"translateX(-50%)",
+          background:"#1c1917",color:"#fff",fontSize:10,lineHeight:1.5,padding:"7px 10px",
+          borderRadius:7,width:220,zIndex:999,pointerEvents:"none",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+          <b style={{display:"block",marginBottom:3,fontSize:9,opacity:0.7,textTransform:"uppercase",letterSpacing:"0.08em"}}>{term}</b>
+          {tip}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -1154,7 +1328,7 @@ function ObjectivePanel({meta, shopify, rate}){
                 sub="receita Shopify proporcional"/>
               <KPI label="LPV"         value={fmt(allData.lpv)}          accent={T.violet}/>
               <KPI label="Custo/LPV"   value={fmtR(allData.costLpv)}    accent={T.violet}/>
-              <KPI label="Checkout"    value={fmt(allData.checkout)}     accent={T.warn}/>
+              <KPI label="Fin. Carrinho"    value={fmt(allData.checkout)}     accent={T.warn}/>
               <KPI label="Add Cart"    value={fmt(allData.addCart)}      accent={T.warn}/>
               <KPI label="CPM"         value={fmtR(allData.cpm)}         accent={T.meta}/>
             </div>
@@ -1277,7 +1451,7 @@ function MonthlyView({meta,shopify,rate}){
 }
 
 /* ─── TAB: CONSOLIDADO ───────────────────────────────────── */
-function ConsolidatedTab({meta,shopify,rate}){
+function ConsolidatedTab({meta,shopify,rate,fee=6.8}){
   const dailyData=useMemo(()=>buildDailyData(meta?.byDay,shopify?.byDay,rate),[meta,shopify,rate]);
   const roasGlobal=meta?.totals.spend>0&&shopify?(shopify.totalRevenue*rate)/meta.totals.spend:0;
   const roasDays=dailyData.filter(d=>d.roas!==null);
@@ -1295,6 +1469,8 @@ function ConsolidatedTab({meta,shopify,rate}){
         <KPI label="ROAS Médio/Dia"  value={fmtX(roasAvg)}   accent={T.violet}     sub={`${roasDays.length} dias`}/>
         <KPI label="Pedidos Shopify" value={fmt(shopify?.totalOrders)}              accent={T.shopify}/>
         <KPI label="Ticket Médio"    value={fmtUSD(shopify?.avgTicket)}             accent={T.shopify}/>
+        <KPI label="Rec. Líq. BRL" value={fmtR((shopify?.totalRevenue||0)*rate*(1-fee/100))}
+          accent={T.good} sub={`após ${fee}% Stripe`}/>
         <KPI label="Compras Meta"    value={fmt(meta?.totals.purchases)}            accent={T.meta} sub="atribuição Meta"/>
         <KPI label="CPA Meta"        value={fmtR(meta?.totals.cpa)}               accent={T.meta}/>
         <KPI label="LPV"             value={fmt(meta?.totals.lpv)}                 accent={T.violet}/>
@@ -1528,7 +1704,7 @@ function CreativesTable({rows, sort, onSort, images, onImageUpload}){
 
 
 /* ─── TAB: META ADS ──────────────────────────────────────── */
-function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
+function MetaTab({meta,shopify,rate,fee=6.8,onFile,creativeImages,onImageUpload}){
   const[sub,setSub]=useState("overview");
 
   const creativeRows=useMemo(()=>{
@@ -1626,7 +1802,7 @@ function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
                   <KPI label="Vis. Pág."    value={fmt(meta.totals.lpv)}          accent={T.violet}/>
                   <KPI label="Custo/LPV"   value={fmtR(meta.totals.costLpv)}    accent={T.violet}/>
                   <KPI label="Add Carrinho" value={fmt(meta.totals.addCart)}      accent={T.warn}/>
-                  {meta.totals.hasCheckout&&<KPI label="Finalizações" value={fmt(meta.totals.checkout)} accent={T.warn}/>}
+                  {meta.totals.hasCheckout&&<KPI label="Fin. Carrinho" value={fmt(meta.totals.checkout)} accent={T.warn}/>}
                   <KPI label="Compras"     value={fmt(meta.totals.purchases)}    accent={T.good}/>
                   <KPI label="CPA"         value={fmtR(meta.totals.cpa)}        accent={T.good}/>
                   <KPI label="CVR LPV→Comp" value={fmtPct(meta.totals.cvr)}     accent={T.violet}/>
@@ -1643,7 +1819,7 @@ function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
                 {label:"Cliques",           value:meta.totals.clicks,      color:"#60a5fa"},
                 {label:"Vis. Pág. Destino", value:meta.totals.lpv,         color:T.violet},
                 {label:"Add Carrinho",      value:meta.totals.addCart,     color:T.warn},
-                {label:"Checkout",          value:meta.totals.checkout,    color:"#f97316"},
+                {label:"Fin. Carrinho",          value:meta.totals.checkout,    color:"#f97316"},
                 {label:"Compras (Meta)",    value:meta.totals.purchases,   color:T.good},
               ].map(s=><FunnelBar key={s.label} {...s} max={meta.totals.impressions}/>)}
               <div style={{marginTop:14,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,borderTop:`1px solid ${T.border}`,paddingTop:14}}>
@@ -1700,7 +1876,7 @@ function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
 }
 
 /* ─── TAB: SHOPIFY ───────────────────────────────────────── */
-function ShopifyTab({shopify,onFile}){
+function ShopifyTab({shopify,onFile,productImages,onProductImageUpload}){
   const countryRows=useMemo(()=>{
     if(!shopify)return[];
     return Object.entries(shopify.byCountry).map(([c,d])=>({
@@ -1709,7 +1885,9 @@ function ShopifyTab({shopify,onFile}){
   },[shopify]);
   const productRows=useMemo(()=>{
     if(!shopify)return[];
-    return Object.entries(shopify.byProduct).map(([name,d])=>({name,orders:d.orders}));
+    return Object.entries(shopify.byProduct).map(([name,d])=>({
+      name,orders:d.orders,qty:d.qty||0,revenue:d.revenue||0,skus:d.skus||[]
+    }));
   },[shopify]);
   const{sorted:sC,sort:sortC,onSort:onSC}=useSortable(countryRows,"revenue");
   const{sorted:sP,sort:sortP,onSort:onSP}=useSortable(productRows,"orders");
@@ -1824,10 +2002,112 @@ function PinterestTab({pinterest,onFile}){
 }
 
 /* ─── TAB: CAMPANHA CONFIG ───────────────────────────────── */
+function CampaignCard({name,data,shopify,rate,monthData,expanded,onToggle,creativeImages,onImageUpload}){
+  const months=Object.keys(monthData).sort();
+  const revBRL=(shopify?.totalRevenue||0)*rate;
+  const roas=data.spend>0&&revBRL>0?revBRL/data.spend:0;
+  const cpa=data.purchases>0?data.spend/data.purchases:0;
+  const cpm=data.impressions>0?(data.spend/data.impressions)*1000:0;
+  const ctr=data.impressions>0&&data.clicks>0?(data.clicks/data.impressions)*100:0;
+  const cpc=data.clicks>0?data.spend/data.clicks:0;
+  const days=data.dates?.length||1;
+  const dailyAvg=data.spend/days;
+
+  return(
+    <div style={{background:"#fff",border:`1.5px solid ${expanded?"#2563eb":"#e8e2da"}`,borderRadius:12,
+      marginBottom:12,overflow:"hidden",boxShadow:expanded?"0 0 0 3px #dbeafe":"none",transition:"all 0.15s"}}>
+      {/* Header card */}
+      <div onClick={onToggle} style={{padding:"14px 18px",cursor:"pointer",userSelect:"none"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#1a1714",fontFamily:"'Syne',sans-serif",marginBottom:6}}>{name}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:10,background:"#dbeafe",color:"#2563eb",padding:"2px 8px",borderRadius:20,fontWeight:700}}>
+                {detectObjective(name)}
+              </span>
+              <span style={{fontSize:10,color:"#8a7f74",background:"#f0fdf4",padding:"2px 8px",borderRadius:20}}>
+                {days} dias ativos
+              </span>
+              <span style={{fontSize:10,color:"#16a34a",fontWeight:700,background:"#f0fdf4",padding:"2px 8px",borderRadius:20}}>
+                ~{fmtR(dailyAvg)}/dia méd.
+              </span>
+            </div>
+          </div>
+          <span style={{fontSize:10,color:"#8a7f74",fontFamily:"'Syne',sans-serif",fontWeight:600,marginLeft:12,flexShrink:0}}>
+            {expanded?"▲ fechar":"▼ expandir"}
+          </span>
+        </div>
+        {/* Mini KPIs always visible */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:7,marginTop:12}}>
+          {[
+            {l:"Gasto",      v:fmtR(data.spend),      c:"#2563eb"},
+            {l:"Comp. Meta", v:fmt(data.purchases),   c:"#2563eb"},
+            {l:"CPA",        v:cpa>0?fmtR(cpa):"—",  c:"#d97706"},
+            {l:"ROAS",       v:roas>0?fmtX(roas):"—", c:roas>=3?"#16a34a":roas>=1?"#d97706":"#dc2626"},
+            {l:"LPV",        v:fmt(data.lpv),          c:"#7c3aed"},
+            {l:"CTR",        v:ctr>0?fmtPct(ctr):"—", c:ctr>=1?"#16a34a":ctr>=0.5?"#d97706":"#dc2626"},
+            {l:"CPM",        v:cpm>0?fmtR(cpm):"—",  c:"#8a7f74"},
+            {l:"CPC",        v:cpc>0?fmtR(cpc):"—",  c:"#8a7f74"},
+          ].map(k=>(
+            <div key={k.l} style={{background:"#f5f2ee",borderRadius:7,padding:"7px 9px",borderTop:`2px solid ${k.c}`}}>
+              <div style={{fontSize:7,color:"#8a7f74",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:1}}>{k.l}</div>
+              <div style={{fontSize:13,fontWeight:700,color:k.c,fontFamily:"'Syne',sans-serif"}}>{k.v||"—"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Expanded: by month */}
+      {expanded&&months.length>0&&(
+        <div style={{borderTop:"1px solid #e8e2da",padding:"14px 18px",background:"#faf8f5"}}>
+          <div style={{fontSize:9,color:"#8a7f74",letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:10}}>Por Mês</div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead>
+                <tr>
+                  {["Mês","Gasto","Comp.","LPV","Add Cart","CPM","CPC","CTR"].map(h=>(
+                    <th key={h} style={{padding:"5px 8px",fontSize:9,color:"#8a7f74",letterSpacing:"0.1em",textTransform:"uppercase",
+                      textAlign:h==="Mês"?"left":"right",borderBottom:"1px solid #e8e2da",fontFamily:"'Syne',sans-serif",whiteSpace:"nowrap"}}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {months.map((m,i)=>{
+                  const d=monthData[m];
+                  const mCpm=d.impressions>0?(d.spend/d.impressions)*1000:0;
+                  const mCpc=d.clicks>0?d.spend/d.clicks:0;
+                  const mCtr=d.impressions>0&&d.clicks>0?(d.clicks/d.impressions)*100:0;
+                  const[yr,mo]=m.split("-");
+                  const label=new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
+                  return(
+                    <tr key={m} style={{background:i%2===0?"#fff":"#f5f2ee"}}>
+                      <td style={{padding:"6px 8px",fontWeight:700,color:"#1a1714",whiteSpace:"nowrap"}}>{label}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:"#2563eb",fontWeight:600}}>{fmtR(d.spend)}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:d.purchases>0?"#2563eb":"#c8bfb4",fontWeight:d.purchases>0?700:400}}>{fmt(d.purchases)}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:"#7c3aed"}}>{fmt(d.lpv)}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:"#d97706"}}>{fmt(d.addCart)}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:"#8a7f74"}}>{mCpm>0?fmtR(mCpm):"—"}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:"#8a7f74"}}>{mCpc>0?fmtR(mCpc):"—"}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:mCtr>=1?"#16a34a":mCtr>=0.5?"#d97706":mCtr>0?"#dc2626":"#c8bfb4"}}>{mCtr>0?fmtPct(mCtr):"—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CampaignTab({meta, shopify, rate, creativeImages, onImageUpload}){
-  const roasGlobal = meta?.totals.spend>0&&shopify?(shopify.totalRevenue*rate)/meta.totals.spend:0;
-  const[drawerOpen,setDrawerOpen]=useState(false);
-  const[cfg,setCfg]=useState({
+  const[expandedCampaigns,setExpandedCampaigns]=useState({});
+  const[filterMonth,setFilterMonth]=useState("all");
+  const[showConfig,setShowConfig]=useState(false);
+  const[cfg,setCfg]=useState(()=>lsGet("gwm_campaign_cfg",{
     campaignName:"Vendas | Fev26",
     objective:"Vendas",
     optimization:"Maximizar conversões → Checkout",
@@ -1841,221 +2121,323 @@ function CampaignTab({meta, shopify, rate, creativeImages, onImageUpload}){
     interests:"Artes visuais\nImpressão sob demanda\nEtsy · Freelancer\nArts, Artists, Artwork\nGraphic designer (campo/empregador/cargo)",
     placements:"Automático (Advantage+)",
     notes:"",
-  });
-  const setF=(k,v)=>setCfg(c=>({...c,[k]:v}));
+  }));
+  const setF=(k,v)=>{setCfg(p=>{const n={...p,[k]:v};lsSet("gwm_campaign_cfg",n);return n;});};
   const[newC,setNewC]=useState("");
+
+  // Derive available months from byCampaignMonth
+  const allMonths=useMemo(()=>{
+    if(!meta)return[];
+    const ms=new Set();
+    Object.values(meta.byCampaignMonth||{}).forEach(d=>ms.add(d.month));
+    return [...ms].sort();
+  },[meta]);
+
+  // Campaign data grouped, filtered by month
+  const campaignList=useMemo(()=>{
+    if(!meta)return[];
+    return Object.entries(meta.byCampaign).map(([name,data])=>{
+      // month data for this campaign
+      const monthData={};
+      Object.entries(meta.byCampaignMonth||{}).forEach(([k,d])=>{
+        if(d.campaign===name){
+          if(filterMonth==="all"||d.month===filterMonth) monthData[d.month]=d;
+        }
+      });
+      // If filtering by month, recalculate totals
+      let displayData=data;
+      if(filterMonth!=="all"){
+        const md=monthData[filterMonth];
+        if(md) displayData={...data,...md,dates:data.dates?.filter(dt=>dt.startsWith(filterMonth))||[]};
+      }
+      return{name,data:displayData,monthData};
+    }).sort((a,b)=>b.data.spend-a.data.spend);
+  },[meta,filterMonth]);
+
+  const toggleCampaign=(name)=>setExpandedCampaigns(p=>({...p,[name]:!p[name]}));
+
   const F=({label,k,multi,rows=3})=>(
     <div style={{marginBottom:13}}>
-      <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{label}</div>
+      <div style={{fontSize:9,color:"#8a7f74",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{label}</div>
       {multi
         ?<textarea value={cfg[k]} onChange={e=>setF(k,e.target.value)} rows={rows}
-           style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 10px",fontSize:11,resize:"vertical",lineHeight:1.6}}/>
+           style={{width:"100%",background:"#faf8f5",border:"1px solid #e8e2da",borderRadius:6,padding:"7px 10px",fontSize:11,resize:"vertical",lineHeight:1.6}}/>
         :<input value={cfg[k]} onChange={e=>setF(k,e.target.value)}
-           style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 10px",fontSize:11}}/>
+           style={{width:"100%",background:"#faf8f5",border:"1px solid #e8e2da",borderRadius:6,padding:"7px 10px",fontSize:11}}/>
       }
     </div>
   );
-  const COUNTRY_FLAGS={"DE":"🇩🇪","ES":"🇪🇸","FR":"🇫🇷","GB":"🇬🇧","IE":"🇮🇪","NL":"🇳🇱","US":"🇺🇸","BR":"🇧🇷","IT":"🇮🇹","PT":"🇵🇹","AU":"🇦🇺","CA":"🇨🇦"};
 
   return(
     <div>
-      {/* Campaign summary card — clickable */}
-      <div onClick={()=>setDrawerOpen(o=>!o)} style={{
-        background:T.card,border:`1.5px solid ${drawerOpen?T.meta:T.border}`,
-        borderRadius:12,padding:18,marginBottom:16,cursor:"pointer",
-        transition:"border-color 0.15s, box-shadow 0.15s",
-        boxShadow:drawerOpen?"0 0 0 3px "+T.metaL:"none",
-      }}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-          <div>
-            <div style={{fontSize:15,fontWeight:800,color:T.text,fontFamily:"'Syne',sans-serif",marginBottom:2}}>{cfg.campaignName}</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:10,background:T.metaL,color:T.meta,padding:"2px 8px",borderRadius:20,fontWeight:700}}>{cfg.objective}</span>
-              <span style={{fontSize:10,background:T.violetL,color:T.violet,padding:"2px 8px",borderRadius:20}}>{cfg.optimization.split("→")[0].trim()}</span>
-              <span style={{fontSize:10,background:"#f0fdf4",color:T.good,padding:"2px 8px",borderRadius:20}}>{cfg.budget}</span>
-              {cfg.countries.map(c=><span key={c} style={{fontSize:10,color:T.muted}}>{COUNTRY_FLAGS[c]||""}{c}</span>)}
-            </div>
-          </div>
-          <span style={{fontSize:11,color:T.muted,fontFamily:"'Syne',sans-serif",letterSpacing:"0.06em",marginTop:2}}>
-            {drawerOpen?"▲ fechar":"▼ expandir"}
-          </span>
-        </div>
-        {/* Inline results */}
-        {meta&&(
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
-            {[
-              {l:"Gasto",    v:fmtR(meta.totals.spend),        c:T.meta},
-              {l:"Comp. Meta",v:fmt(meta.totals.purchases),    c:T.meta},
-              {l:"CPA",     v:fmtR(meta.totals.cpa),          c:T.warn},
-              {l:"ROAS",    v:fmtX(roasGlobal),               c:roasGlobal>=3?T.good:roasGlobal>=1?T.warn:roasGlobal>0?T.bad:T.faint},
-              {l:"Ped. Shop",v:fmt(shopify?.totalOrders),     c:T.shopify},
-              {l:"Rec. USD", v:fmtUSD(shopify?.totalRevenue), c:T.shopify},
-              {l:"LPV",     v:fmt(meta.totals.lpv),           c:T.violet},
-              {l:"CTR",     v:fmtPct(meta.totals.ctr),        c:T.meta},
-              {l:"CPM",     v:fmtR(meta.totals.cpm),          c:T.meta},
-              {l:"CPC",     v:fmtR(meta.totals.cpc),          c:T.meta},
-            ].map(k=>(
-              <div key={k.l} style={{background:T.bg,borderRadius:8,padding:"8px 10px",borderTop:`2px solid ${k.c}`}}>
-                <div style={{fontSize:8,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:2}}>{k.l}</div>
-                <div style={{fontSize:14,fontWeight:700,color:k.c,fontFamily:"'Syne',sans-serif"}}>{k.v||"—"}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {!meta&&<div style={{fontSize:11,color:T.faint,textAlign:"center",padding:"8px 0"}}>Suba o CSV do Meta para ver resultados</div>}
-      </div>
-
-      {/* Expanded drawer */}
-      {drawerOpen&&(
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:16,borderTop:`3px solid ${T.meta}`}}>
-          <SectionTitle color={T.meta}>Detalhes por Criativo</SectionTitle>
-          {meta?(
-            <div style={{overflowX:"auto",marginBottom:16}}>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead>
-                  <tr style={{background:T.bg}}>
-                    {["Criativo","Impr.","LPV","Cart","Compras","Gasto","CPA","CTR","CPM"].map(h=>(
-                      <th key={h} style={{padding:"7px 10px",fontSize:9,color:T.muted,letterSpacing:"0.1em",
-                        textTransform:"uppercase",textAlign:h==="Criativo"?"left":"right",
-                        borderBottom:`2px solid ${T.border}`,fontFamily:"'Syne',sans-serif",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(meta.byCreative).sort((a,b)=>b[1].purchases-a[1].purchases).map(([name,d],i)=>{
-                    const cpa=d.purchases>0?d.spend/d.purchases:0;
-                    const cpm=d.impressions>0?(d.spend/d.impressions)*1000:0;
-                    const ctr=d.impressions>0?(d.clicks/d.impressions)*100:0;
-                    const shortName=name.split("|")[0].trim();
-                    return(
-                      <tr key={name} style={{background:i%2===0?T.card:"#faf8f5"}}>
-                        <td style={{padding:"7px 10px",maxWidth:240}}>
-                          <CreativeImageCell adName={name} images={creativeImages||{}} onUpload={onImageUpload||(() => {})}/>
-                        </td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmt(d.impressions)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.violet}}>{fmt(d.lpv)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.warn}}>{fmt(d.addCart)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",fontWeight:700,color:d.purchases>0?T.good:T.faint}}>{fmt(d.purchases)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(d.spend)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:cpa>0?T.text:T.faint}}>{cpa>0?fmtR(cpa):"—"}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:ctr>=2?T.good:ctr>=0.5?T.warn:ctr>0?T.bad:T.faint}}>{fmtPct(ctr)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmtR(cpm)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ):<div style={{fontSize:11,color:T.faint,padding:"12px 0"}}>Suba o CSV do Meta para ver criativos</div>}
-
-          <SectionTitle color={T.shopify}>Detalhes por País</SectionTitle>
-          {meta?(
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead>
-                  <tr style={{background:T.bg}}>
-                    {["País","Gasto","Comp. Meta","Ped. Shop","Rec. USD","Rec. BRL","ROAS","CPA","CPM","CTR"].map(h=>(
-                      <th key={h} style={{padding:"7px 10px",fontSize:9,color:T.muted,letterSpacing:"0.1em",
-                        textTransform:"uppercase",textAlign:h==="País"?"left":"right",
-                        borderBottom:`2px solid ${T.border}`,fontFamily:"'Syne',sans-serif",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(meta.byCountry).sort((a,b)=>b[1].spend-a[1].spend).map(([country,d],i)=>{
-                    const sRev=shopify?.byCountry[country]?.revenue||0;
-                    const sOrd=shopify?.byCountry[country]?.orders||0;
-                    const revBRL=sRev*rate;
-                    const roas=d.spend>0&&revBRL>0?revBRL/d.spend:0;
-                    const cpa=d.purchases>0?d.spend/d.purchases:0;
-                    const cpm=d.impressions>0?(d.spend/d.impressions)*1000:0;
-                    const ctr=d.impressions>0?((d.clicks||0)/d.impressions)*100:0;
-                    return(
-                      <tr key={country} style={{background:i%2===0?T.card:"#faf8f5"}}>
-                        <td style={{padding:"7px 10px",fontSize:12,fontWeight:700,color:T.text}}>{COUNTRY_FLAGS[country]||""} {country}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(d.spend)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:d.purchases>0?T.meta:T.faint,fontWeight:d.purchases>0?700:400}}>{fmt(d.purchases)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:sOrd>0?T.shopify:T.faint,fontWeight:sOrd>0?700:400}}>{fmt(sOrd)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:sRev>0?T.good:T.faint}}>{fmtUSD(sRev)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:revBRL>0?T.good:T.faint}}>{fmtR(revBRL)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",fontWeight:700,color:roas>=3?T.good:roas>=1?T.warn:roas>0?T.bad:T.faint}}>{roas>0?fmtX(roas):"—"}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:cpa>0?T.text:T.faint}}>{cpa>0?fmtR(cpa):"—"}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmtR(cpm)}</td>
-                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:ctr>=2?T.good:ctr>=0.5?T.warn:ctr>0?T.bad:T.faint}}>{fmtPct(ctr)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ):<div style={{fontSize:11,color:T.faint,padding:"12px 0"}}>Suba o CSV do Meta para ver países</div>}
+      {/* Month filter */}
+      {allMonths.length>0&&(
+        <div style={{display:"flex",gap:6,marginBottom:18,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:9,color:"#8a7f74",fontFamily:"'Syne',sans-serif",letterSpacing:"0.1em",textTransform:"uppercase",marginRight:4}}>Período</span>
+          {[["all","Todos"],...allMonths.map(m=>{const[yr,mo]=m.split("-");const l=new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});return[m,l];})].map(([k,l])=>(
+            <button key={k} onClick={()=>setFilterMonth(k)} style={{
+              fontSize:10,padding:"4px 12px",borderRadius:20,cursor:"pointer",fontFamily:"'Syne',sans-serif",fontWeight:700,
+              border:`1px solid ${filterMonth===k?"#2563eb":"#e8e2da"}`,
+              background:filterMonth===k?"#dbeafe":"transparent",color:filterMonth===k?"#2563eb":"#8a7f74"}}>
+              {l}
+            </button>
+          ))}
+          <button onClick={()=>setExpandedCampaigns(p=>{const all={};campaignList.forEach(({name})=>all[name]=true);return all;})}
+            style={{marginLeft:"auto",fontSize:9,padding:"4px 10px",borderRadius:20,cursor:"pointer",border:"1px solid #e8e2da",background:"transparent",color:"#8a7f74",fontFamily:"'Syne',sans-serif"}}>
+            expandir tudo
+          </button>
+          <button onClick={()=>setExpandedCampaigns({})}
+            style={{fontSize:9,padding:"4px 10px",borderRadius:20,cursor:"pointer",border:"1px solid #e8e2da",background:"transparent",color:"#8a7f74",fontFamily:"'Syne',sans-serif"}}>
+            colapsar tudo
+          </button>
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-      <div>
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:14}}>
-          <SectionTitle color={T.meta}>Estrutura da Campanha</SectionTitle>
-          <F label="Nome da campanha" k="campaignName"/>
-          <F label="Objetivo" k="objective"/>
-          <F label="Otimização" k="optimization"/>
-          <F label="Evento de conversão" k="event"/>
-          <F label="Pixel / Dataset" k="pixel"/>
-          <F label="Orçamento diário" k="budget"/>
-          <F label="Modelo de atribuição" k="attribution"/>
+      {/* Campaign cards */}
+      {!meta&&<div style={{textAlign:"center",padding:"44px 0",color:"#c8bfb4",fontSize:13}}>Suba o CSV do Meta Ads na aba Meta Ads para ver campanhas aqui</div>}
+      {campaignList.map(({name,data,monthData})=>(
+        <CampaignCard key={name} name={name} data={data} shopify={shopify} rate={rate}
+          monthData={monthData} expanded={!!expandedCampaigns[name]}
+          onToggle={()=>toggleCampaign(name)}
+          creativeImages={creativeImages} onImageUpload={onImageUpload}/>
+      ))}
+
+      {/* Config section (collapsible) */}
+      <div style={{marginTop:24}}>
+        <div onClick={()=>setShowConfig(o=>!o)} style={{
+          display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",
+          padding:"10px 0",borderBottom:"2px solid #7c3aed",marginBottom:showConfig?16:0}}>
+          <span style={{fontSize:9,fontWeight:700,color:"#7c3aed",letterSpacing:"0.16em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif"}}>
+            Config. da Campanha Ativa
+          </span>
+          <span style={{fontSize:10,color:"#c8bfb4",fontWeight:600}}>{showConfig?"▲":"▼"}</span>
         </div>
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18}}>
-          <SectionTitle color={T.warn}>Notas internas</SectionTitle>
-          <F label="Observações" k="notes" multi rows={5}/>
-        </div>
-      </div>
-      <div>
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:14}}>
-          <SectionTitle color={T.shopify}>Público-alvo</SectionTitle>
-          <div style={{marginBottom:13}}>
-            <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6,fontFamily:"'Syne',sans-serif"}}>Países</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:6}}>
-              {cfg.countries.map(c=>(
-                <span key={c} style={{fontSize:11,background:T.metaL,color:T.meta,padding:"2px 9px",borderRadius:20,
-                  border:`1px solid ${T.meta}30`,display:"flex",gap:4,alignItems:"center"}}>
-                  {c}
-                  <button onClick={()=>setF("countries",cfg.countries.filter(x=>x!==c))}
-                    style={{background:"none",border:"none",cursor:"pointer",color:"#93c5fd",fontSize:12,lineHeight:1}}>×</button>
-                </span>
-              ))}
-              <input value={newC} onChange={e=>setNewC(e.target.value)}
-                onKeyDown={e=>{if(e.key==="Enter"&&newC.trim()){setF("countries",[...cfg.countries,newC.trim().toUpperCase()]);setNewC("");}}}
-                placeholder="+ país" style={{fontSize:11,background:T.metaL,border:`1px dashed #93c5fd`,
-                borderRadius:20,padding:"2px 9px",color:T.meta,width:68}}/>
+        {showConfig&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div>
+              <div style={{background:"#fff",border:"1px solid #e8e2da",borderRadius:12,padding:18,marginBottom:14}}>
+                <div style={{fontSize:9,fontWeight:700,color:"#7c3aed",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:14,borderBottom:"1px solid #e8e2da",paddingBottom:8}}>Estrutura da Campanha</div>
+                <F label="Nome da Campanha" k="campaignName"/>
+                <F label="Objetivo" k="objective"/>
+                <F label="Otimização" k="optimization"/>
+                <F label="Evento de conversão" k="event"/>
+                <F label="Pixel / Dataset" k="pixel"/>
+                <F label="Orçamento diário" k="budget"/>
+                <F label="Modelo de atribuição" k="attribution"/>
+              </div>
+              <div style={{background:"#fff",border:"1px solid #e8e2da",borderRadius:12,padding:18}}>
+                <div style={{fontSize:9,fontWeight:700,color:"#d97706",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:14,borderBottom:"1px solid #e8e2da",paddingBottom:8}}>Notas internas</div>
+                <F label="Observações" k="notes" multi rows={5}/>
+              </div>
+            </div>
+            <div>
+              <div style={{background:"#fff",border:"1px solid #e8e2da",borderRadius:12,padding:18,marginBottom:14}}>
+                <div style={{fontSize:9,fontWeight:700,color:"#008060",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:14,borderBottom:"1px solid #e8e2da",paddingBottom:8}}>Público-alvo</div>
+                <div style={{marginBottom:13}}>
+                  <div style={{fontSize:9,color:"#8a7f74",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6,fontFamily:"'Syne',sans-serif"}}>Países</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:6}}>
+                    {cfg.countries.map(co=>(
+                      <span key={co} style={{fontSize:11,background:"#dbeafe",color:"#2563eb",padding:"2px 9px",borderRadius:20,
+                        border:"1px solid #2563eb30",display:"flex",gap:4,alignItems:"center"}}>
+                        {(CDATA[co]?.flag||"")} {co}
+                        <button onClick={()=>setF("countries",cfg.countries.filter(x=>x!==co))}
+                          style={{background:"none",border:"none",cursor:"pointer",color:"#93c5fd",fontSize:12,lineHeight:1}}>×</button>
+                      </span>
+                    ))}
+                    <input value={newC} onChange={e=>setNewC(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter"&&newC.trim()){setF("countries",[...cfg.countries,newC.trim().toUpperCase()]);setNewC("");}}}
+                      placeholder="+ país" style={{fontSize:11,background:"#dbeafe",border:"1px dashed #93c5fd",
+                      borderRadius:20,padding:"2px 9px",color:"#2563eb",width:68}}/>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:13}}>
+                  {[["ageMin","Idade mín."],["ageMax","Idade máx."],["gender","Gênero"]].map(([k,l])=>(
+                    <div key={k}>
+                      <div style={{fontSize:9,color:"#8a7f74",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{l}</div>
+                      <input value={cfg[k]} onChange={e=>setF(k,e.target.value)}
+                        style={{width:"100%",background:"#faf8f5",border:"1px solid #e8e2da",borderRadius:6,padding:"6px 8px",fontSize:11}}/>
+                    </div>
+                  ))}
+                </div>
+                <F label="Lookalikes / Públicos" k="lookalikes" multi rows={4}/>
+              </div>
+              <div style={{background:"#fff",border:"1px solid #e8e2da",borderRadius:12,padding:18}}>
+                <div style={{fontSize:9,fontWeight:700,color:"#008060",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:14,borderBottom:"1px solid #e8e2da",paddingBottom:8}}>Interesses & Posicionamento</div>
+                <F label="Direcionamento detalhado" k="interests" multi rows={5}/>
+                <F label="Posicionamentos" k="placements"/>
+              </div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:13}}>
-            {[["ageMin","Idade mín."],["ageMax","Idade máx."],["gender","Gênero"]].map(([k,l])=>(
-              <div key={k}>
-                <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{l}</div>
-                <input value={cfg[k]} onChange={e=>setF(k,e.target.value)}
-                  style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11}}/>
-              </div>
-            ))}
-          </div>
-          <F label="Lookalikes / Públicos" k="lookalikes" multi rows={4}/>
-        </div>
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18}}>
-          <SectionTitle color={T.shopify}>Interesses & Posicionamento</SectionTitle>
-          <F label="Direcionamento detalhado" k="interests" multi rows={5}/>
-          <F label="Posicionamentos" k="placements"/>
-        </div>
+        )}
       </div>
-    </div>
     </div>
   );
 }
+
+
+/* ─── LEADS PANEL ────────────────────────────────────────── */
+const LEAD_STATUSES=["novo","respondido","convertido","descartado"];
+const STATUS_COLORS={novo:"#f59e0b",respondido:"#2563eb",convertido:"#16a34a",descartado:"#9ca3af"};
+
+function LeadsPanel(){
+  const[leads,setLeads]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState({date:new Date().toISOString().slice(0,10),name:"",email:"",country:"",source:"Shopify",message:"",notes:""});
+  const[saving,setSaving]=useState(false);
+  const[sqlNotice,setSqlNotice]=useState(false);
+
+  useEffect(()=>{
+    sbLoadLeads().then(rows=>{
+      setLeads(rows||[]);
+      setLoading(false);
+    }).catch(()=>{setSqlNotice(true);setLoading(false);});
+  },[]);
+
+  const addLead=async()=>{
+    if(!form.name&&!form.email)return;
+    setSaving(true);
+    const row=await sbAddLead({...form,status:"novo"});
+    if(row)setLeads(p=>[row,...p]);
+    else setSqlNotice(true);
+    setForm(f=>({...f,name:"",email:"",country:"",message:"",notes:""}));
+    setSaving(false);
+  };
+  const updateStatus=async(id,status)=>{
+    await sbUpdateLead(id,{status});
+    setLeads(p=>p.map(l=>l.id===id?{...l,status}:l));
+  };
+  const deleteLead=async(id)=>{
+    await sbDeleteLead(id);
+    setLeads(p=>p.filter(l=>l.id!==id));
+  };
+
+  const statCounts=LEAD_STATUSES.reduce((m,s)=>({...m,[s]:leads.filter(l=>l.status===s).length}),{});
+
+  return(
+    <div>
+      {sqlNotice&&(
+        <div style={{background:"#fef3c7",border:"1px solid #f59e0b",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:11,marginBottom:6,color:"#92400e"}}>⚠ Crie a tabela no Supabase primeiro</div>
+          <pre style={{fontSize:10,color:"#78350f",background:"#fff7ed",padding:"8px 10px",borderRadius:6,overflowX:"auto",lineHeight:1.6}}>{`create table leads (
+  id serial primary key,
+  date text, name text, email text,
+  country text, source text,
+  message text, notes text,
+  status text default 'novo',
+  created_at timestamp default now()
+);
+alter table leads enable row level security;
+create policy "public rw" on leads for all using (true) with check (true);`}</pre>
+        </div>
+      )}
+
+      {/* Status strip */}
+      <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+        {LEAD_STATUSES.map(s=>(
+          <div key={s} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:9,
+            padding:"8px 14px",borderLeft:`3px solid ${s==="novo"?"#f59e0b":s==="respondido"?"#2563eb":s==="convertido"?T.good:T.faint}`}}>
+            <div style={{fontSize:9,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",fontFamily:"'Syne',sans-serif"}}>{s}</div>
+            <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:"'Syne',sans-serif"}}>{statCounts[s]||0}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"340px 1fr",gap:16,alignItems:"start"}}>
+        {/* Form */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18}}>
+          <SectionTitle color={T.warn}>Registrar Lead / Mensagem</SectionTitle>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div>
+              <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3,fontFamily:"'Syne',sans-serif"}}>Data</div>
+              <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}
+                style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11,boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3,fontFamily:"'Syne',sans-serif"}}>Origem</div>
+              <select value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}
+                style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11,boxSizing:"border-box"}}>
+                {["Shopify","Email","Instagram","WhatsApp","Site","Outro"].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          {[["name","Nome"],["email","Email"],["country","País"]].map(([k,l])=>(
+            <div key={k} style={{marginBottom:8}}>
+              <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3,fontFamily:"'Syne',sans-serif"}}>{l}</div>
+              <input value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}
+                style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11,boxSizing:"border-box"}}/>
+            </div>
+          ))}
+          <div style={{marginBottom:8}}>
+            <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3,fontFamily:"'Syne',sans-serif"}}>Mensagem</div>
+            <textarea value={form.message} onChange={e=>setForm(f=>({...f,message:e.target.value}))}
+              rows={3} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11,resize:"vertical",boxSizing:"border-box"}}/>
+          </div>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3,fontFamily:"'Syne',sans-serif"}}>Notas internas</div>
+            <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
+              rows={2} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11,resize:"vertical",boxSizing:"border-box"}}/>
+          </div>
+          <button onClick={addLead} disabled={saving||(!form.name&&!form.email)}
+            style={{width:"100%",background:T.warn,color:"#fff",border:"none",borderRadius:8,
+              padding:"10px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Syne',sans-serif"}}>
+            {saving?"Salvando...":"+ Adicionar Lead"}
+          </button>
+        </div>
+
+        {/* List */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+          <div style={{padding:"10px 14px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <SectionTitle color={T.warn} mb={0}>{leads.length} Leads / Mensagens</SectionTitle>
+            <ExportBtn data={leads} filename="leads.csv" cols={[
+              {key:"date",label:"Data"},{key:"name",label:"Nome"},{key:"email",label:"Email"},
+              {key:"country",label:"País"},{key:"source",label:"Origem"},{key:"status",label:"Status"},
+              {key:"message",label:"Mensagem"},{key:"notes",label:"Notas"},
+            ]}/>
+          </div>
+          {loading?<div style={{padding:28,textAlign:"center",color:T.faint,fontSize:12}}>Carregando...</div>:(
+            leads.length===0
+              ?<div style={{padding:36,textAlign:"center",color:T.faint,fontSize:12}}>Nenhum lead registrado ainda.</div>
+              :<div style={{maxHeight:580,overflowY:"auto"}}>
+                {leads.map((l,i)=>(
+                  <div key={l.id} style={{padding:"12px 14px",borderBottom:`1px solid ${T.border}`,
+                    background:i%2===0?"#fffcf9":T.card}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                      <div>
+                        <span style={{fontWeight:700,fontSize:12,color:T.text}}>{l.name||"—"}</span>
+                        {l.email&&<span style={{fontSize:10,color:T.muted,marginLeft:8}}>{l.email}</span>}
+                        <div style={{fontSize:10,color:T.faint,marginTop:2}}>
+                          {l.date} · {l.source}{l.country?" · "+(CDATA[normalizeCountry(l.country)]?.flag||"")+" "+l.country:""}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                        <select value={l.status||"novo"} onChange={e=>updateStatus(l.id,e.target.value)}
+                          style={{fontSize:9,padding:"2px 6px",borderRadius:20,border:`1px solid ${T.border}`,
+                            background:l.status==="convertido"?"#dcfce7":l.status==="descartado"?"#f3f4f6":l.status==="respondido"?"#dbeafe":"#fef3c7",
+                            cursor:"pointer",fontFamily:"'Syne',sans-serif",fontWeight:700}}>
+                          {LEAD_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <button onClick={()=>deleteLead(l.id)}
+                          style={{background:"none",border:"none",cursor:"pointer",color:T.faint,fontSize:12}}>🗑</button>
+                      </div>
+                    </div>
+                    {l.message&&<div style={{fontSize:11,color:T.text,background:T.bg,borderRadius:6,padding:"6px 9px",marginBottom:l.notes?6:0,lineHeight:1.5}}>{l.message}</div>}
+                    {l.notes&&<div style={{fontSize:10,color:T.muted,fontStyle:"italic",marginTop:3}}>{l.notes}</div>}
+                  </div>
+                ))}
+              </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 /* ─── TAB: FINANCEIRO ────────────────────────────────────── */
 const DEFAULT_CATEGORIES=["Mídia Meta","Mídia Pinterest","Mídia Google","Ferramenta","Freelancer","Operacional","Outro"];
 const CAT_COLORS=["#2563eb","#7c3aed","#d97706","#16a34a","#dc2626","#0891b2","#9333ea","#ea580c"];
 
-function FinancialTab({meta,shopify,rate}){
+function FinancialTab({meta,shopify,rate,fee=6.8}){
   const[expenses,setExpenses]=useState([]);
   const[loadingExp,setLoadingExp]=useState(true);
   const[view,setView]=useState(lsGet("gwm_fin_view","resumo"));
@@ -2088,10 +2470,11 @@ function FinancialTab({meta,shopify,rate}){
   // ── Computations ──────────────────────────────────
   const metaSpend=meta?.totals.spend||0;
   const shopifyRevBRL=(shopify?.totalRevenue||0)*rate;
+  const shopifyRevNet=shopifyRevBRL*(1-fee/100); // after Stripe fees
   const totalManualExp=expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
   const totalExp=metaSpend+totalManualExp;
-  const roasReal=totalExp>0&&shopifyRevBRL>0?shopifyRevBRL/totalExp:0;
-  const profit=shopifyRevBRL-totalExp;
+  const roasReal=totalExp>0&&shopifyRevNet>0?shopifyRevNet/totalExp:0;
+  const profit=shopifyRevNet-totalExp;
 
   const byCat={};
   if(metaSpend>0) byCat["Mídia Meta"]=(byCat["Mídia Meta"]||0)+metaSpend;
@@ -2123,7 +2506,9 @@ function FinancialTab({meta,shopify,rate}){
     <div>
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12,marginBottom:20}}>
-        <KPI label="Receita Shopify (BRL)" value={fmtR(shopifyRevBRL)} accent={T.shopify} large/>
+        <KPI label="Receita Bruta (BRL)" value={fmtR(shopifyRevBRL)} accent={T.shopify}/>
+        <KPI label="Receita Líq. (BRL)" value={fmtR(shopifyRevNet)} accent={T.good}
+          sub={`após ${fee}% Stripe`} large/>
         <KPI label="Gasto Total" value={fmtR(totalExp)} accent={T.meta}
           sub={`Mídia ${fmtR(metaSpend)} + Outros ${fmtR(totalManualExp)}`}/>
         <KPI label="ROAS Real" value={roasReal>0?fmtX(roasReal):"—"} large
@@ -2365,6 +2750,8 @@ export default function App(){
   const[dateFrom,setDateFromRaw]=useState(_sess.dateFrom||"2026-02-03");
   const[dateTo,setDateToRaw]=useState(_sess.dateTo||"");
   const[dollarRate,setDollarRateRaw]=useState(_sess.dollarRate||5.85);
+  const[stripeFee,setStripeFeeRaw]=useState(_sess.stripeFee||6.8); // Stripe fee %
+  const setStripeFee=(v)=>{setStripeFeeRaw(v);persist({stripeFee:v});};
   const[loading,setLoading]=useState(true);
   const[saveStatus,setSaveStatus]=useState("");
 
@@ -2379,14 +2766,16 @@ export default function App(){
   const[shopifyRaw,setShopifyRaw]=useState(null);
   const[pintRaw,setPintRaw]=useState(null);
   const[creativeImages,setCreativeImages]=useState({});
+  const[productImages,setProductImages]=useState({});
 
   // Load from Supabase on mount
   useEffect(()=>{
-    Promise.all([sbLoadAll(), sbLoadCreativeImages()]).then(([data, imgs])=>{
+    Promise.all([sbLoadAll(), sbLoadCreativeImages(), sbLoadCreativeImages("prod_")]).then(([data, imgs, pImgs])=>{
       if(data.meta)      setMetaRaw(data.meta);
       if(data.shopify)   setShopifyRaw(data.shopify);
       if(data.pinterest) setPintRaw(data.pinterest);
       setCreativeImages(imgs||{});
+      setProductImages(pImgs||{});
       setLoading(false);
     });
   },[]);
@@ -2394,10 +2783,17 @@ export default function App(){
   const readRaw=(setter,type)=>file=>{
     const r=new FileReader();
     r.onload=async e=>{
-      const content=e.target.result;
-      setter(content);
+      const incoming=e.target.result;
       setSaveStatus("saving");
-      await sbSave(type, content);
+      // Load existing from Supabase, merge, then save merged
+      const existing=(await sbLoadAll())[type]||"";
+      let merged=incoming;
+      if(existing){
+        if(type==="meta")    merged=mergeMetaCsv(existing,incoming);
+        if(type==="shopify") merged=mergeShopifyCsv(existing,incoming);
+      }
+      setter(merged);
+      await sbSave(type, merged);
       setSaveStatus("saved");
       setTimeout(()=>setSaveStatus(""),2500);
     };
@@ -2414,6 +2810,7 @@ export default function App(){
     {id:"shopify",     label:"Shopify",     color:T.shopify, dot:!!shopify},
     {id:"pinterest",   label:"Pinterest",   color:T.pinterest,dot:!!pinterest},
     {id:"financeiro",  label:"Financeiro",  color:T.good,    dot:!!(meta||shopify)},
+    {id:"leads",       label:"Leads",       color:T.warn,    dot:false},
     {id:"config",      label:"Campanha",    color:T.violet,  dot:false},
   ];
 
@@ -2473,6 +2870,15 @@ export default function App(){
                 fontSize:11,color:T.text,background:T.bg,textAlign:"right"}}/>
             <span style={{fontSize:10,color:T.faint}}>cotação p/ ROAS</span>
           </div>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:T.card,
+            border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px"}}>
+            <span style={{fontSize:10,color:T.muted,fontFamily:"'Syne',sans-serif",letterSpacing:"0.1em",textTransform:"uppercase"}}>Stripe</span>
+            <input type="number" step="0.1" min="0" max="20" value={stripeFee}
+              onChange={e=>setStripeFee(parseFloat(e.target.value)||6.8)}
+              style={{width:44,border:`1px solid ${T.border}`,borderRadius:5,padding:"3px 7px",
+                fontSize:11,color:T.text,background:T.bg,textAlign:"right"}}/>
+            <span style={{fontSize:10,color:T.faint}}>% fee</span>
+          </div>
           {meta&&<span style={{fontSize:10,color:T.muted,background:T.metaL,padding:"4px 10px",borderRadius:20,border:`1px solid ${T.meta}30`}}>
             Meta: {meta.rowCount} linhas
           </span>}
@@ -2491,11 +2897,14 @@ export default function App(){
 
       {/* Content */}
       <div style={{maxWidth:1300,margin:"0 auto",padding:"22px 24px"}}>
-        {tab==="consolidated"&&<ConsolidatedTab meta={meta} shopify={shopify} rate={dollarRate}/>}
-        {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} onFile={readRaw(setMetaRaw,"meta")} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
-        {tab==="shopify"     &&<ShopifyTab shopify={shopify} onFile={readRaw(setShopifyRaw,"shopify")}/>}
+        {tab==="consolidated"&&<ConsolidatedTab meta={meta} shopify={shopify} rate={dollarRate} fee={stripeFee}/>}
+        {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} fee={stripeFee} onFile={readRaw(setMetaRaw,"meta")} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
+        {tab==="shopify"     &&<ShopifyTab shopify={shopify} onFile={readRaw(setShopifyRaw,"shopify")}
+          productImages={productImages}
+          onProductImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setProductImages(p=>({...p,[name]:url}));}}/>}
         {tab==="pinterest"   &&<PinterestTab pinterest={pinterest} onFile={readRaw(setPintRaw,"pinterest")}/>}
-        {tab==="financeiro"  &&<FinancialTab meta={meta} shopify={shopify} rate={dollarRate}/>}
+        {tab==="financeiro"  &&<FinancialTab meta={meta} shopify={shopify} rate={dollarRate} fee={stripeFee}/>}
+        {tab==="leads"       &&<div style={{maxWidth:1100}}><LeadsPanel/></div>}
         {tab==="config"      &&<CampaignTab meta={meta} shopify={shopify} rate={dollarRate} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
       </div>
     </div>

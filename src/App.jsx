@@ -1958,11 +1958,16 @@ function ShopifyTab({shopify,onFile,productImages,onProductImageUpload}){
     }));
   },[shopify]);
   const productRows=useMemo(()=>{
-    if(!shopify)return[];
-    return Object.entries(shopify.byProduct).map(([name,d])=>({
-      name,orders:d.orders,qty:d.qty||0,revenue:d.revenue||0,skus:d.skus||[]
-    }));
-  },[shopify]);
+  if(!shopify)return[];
+  return Object.entries(shopify.byProduct).map(([key,d])=>({
+    key,
+    sku: d.sku || key || "—",
+    name: d.name || "—",
+    orders: d.orders || 0,
+    qty: d.qty || 0,
+    revenue: d.revenue || 0,
+  }));
+},[shopify]);
   const{sorted:sC,sort:sortC,onSort:onSC}=useSortable(countryRows,"revenue");
   const{sorted:sP,sort:sortP,onSort:onSP}=useSortable(productRows,"orders");
 

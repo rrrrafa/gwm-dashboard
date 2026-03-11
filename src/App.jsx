@@ -29,6 +29,40 @@ async function sbLoadAll() {
 }
 
 
+/* ─── SUPABASE STORAGE ───────────────────────────────────── */
+async function sbUploadCreative(adName, file) {
+  try {
+    const ext = file.name.split('.').pop();
+    const key = encodeURIComponent(adName.trim().slice(0,80)) + '.' + ext;
+    const res = await fetch(`${SB_URL}/storage/v1/object/creatives/${key}`, {
+      method: 'POST',
+      headers: { ...sbH, 'x-upsert': 'true', 'Content-Type': file.type },
+      body: file,
+    });
+    if (!res.ok) { const e=await res.text(); console.warn('upload err', e); return null; }
+    return `${SB_URL}/storage/v1/object/public/creatives/${key}`;
+  } catch(e) { console.warn('sbUploadCreative', e); return null; }
+}
+
+async function sbLoadCreativeImages() {
+  try {
+    const res = await fetch(`${SB_URL}/storage/v1/object/list/creatives`, {
+      method: 'POST',
+      headers: { ...sbH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: '', limit: 200 }),
+    });
+    if (!res.ok) return {};
+    const files = await res.json();
+    const map = {};
+    for (const f of files) {
+      if (!f.name) continue;
+      const decoded = decodeURIComponent(f.name.replace(/\.[^.]+$/, ''));
+      map[decoded] = `${SB_URL}/storage/v1/object/public/creatives/${f.name}`;
+    }
+    return map;
+  } catch(e) { return {}; }
+}
+
 /* ─── TOKENS ─────────────────────────────────────────────── */
 const T = {
   bg:"#f5f2ee", card:"#ffffff", border:"#e8e2da",
@@ -62,12 +96,14 @@ const COL = {
   date:        ["início dos relatórios","reporting starts","date","start"],
   reach:       ["alcance","reach"],
   impressions: ["impressões","impressions"],
+  frequency:   ["frequência","frequency"],
   lpv:         ["visualizações da página de destino do site","visualizações da página de destino","landing page views"],
   addCart:     ["adições ao carrinho","add to cart"],
-  checkout:    ["checkouts"],
+  checkout:    ["finalizações de compra no site","finalizações de compra","checkouts iniciados","checkouts","initiate checkout"],
   purchases:   ["compras","purchases"],
   spend:       ["valor usado (brl)","valor usado","amount spent (brl)","amount spent"],
   clicks:      ["cliques no link","link clicks","cliques","clicks"],
+  cpcMeta:     ["cpc (custo por clique no link)","cpc (cost per link click)","cpc (all)","custo por clique no link"],
   saves:       ["saves","pin saves"],
 };
 
@@ -108,11 +144,13 @@ function parseMeta(text, dateFrom, dateTo) {
     return true;
   });
 
-  const totals = { reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0 };
+  const totals = { reach:0,impressions:0,frequency:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0 };
   const byCreative={}, byCountry={}, byCampaign={}, byDay={}, byMonth={};
+  let freqCount=0; // rows with frequency data for averaging
 
   for (const r of rows) {
     const reach=getNum(r,COL.reach), impressions=getNum(r,COL.impressions);
+    const freq=getNum(r,COL.frequency);
     const lpv=getNum(r,COL.lpv), addCart=getNum(r,COL.addCart);
     const checkout=getNum(r,COL.checkout), purchases=getNum(r,COL.purchases);
     const spend=getNum(r,COL.spend), clicks=getNum(r,COL.clicks);
@@ -124,6 +162,7 @@ function parseMeta(text, dateFrom, dateTo) {
     totals.reach+=reach; totals.impressions+=impressions; totals.lpv+=lpv;
     totals.addCart+=addCart; totals.checkout+=checkout;
     totals.purchases+=purchases; totals.spend+=spend; totals.clicks+=clicks;
+    if(freq>0){ totals.frequency+=freq; freqCount++; }
 
     const add=(map,key,init)=>{
       if(!key||key==="—")return;
@@ -163,6 +202,8 @@ function parseMeta(text, dateFrom, dateTo) {
   totals.cpm=totals.impressions>0?(totals.spend/totals.impressions)*1000:0;
   totals.cpc=totals.clicks>0?totals.spend/totals.clicks:0;
   totals.ctr=totals.impressions>0?(totals.clicks/totals.impressions)*100:0;
+  totals.freqAvg=freqCount>0?totals.frequency/freqCount:0;
+  totals.hasCheckout=totals.checkout>0;
   return { totals, byCreative, byCountry, byCampaign, byDay, byMonth, rowCount:rows.length };
 }
 
@@ -429,19 +470,99 @@ function FunnelBar({label,value,max,color}){
 }
 
 function PeriodSelector({dateFrom,dateTo,onFrom,onTo}){
+  const[open,setOpen]=useState(false);
+
+  const today=new Date();
+  const toISO=d=>d.toISOString().slice(0,10);
+
+  const shortcuts=[
+    {label:"7d",    fn:()=>{ const d=new Date(today); d.setDate(d.getDate()-6); onFrom(toISO(d)); onTo(toISO(today)); }},
+    {label:"14d",   fn:()=>{ const d=new Date(today); d.setDate(d.getDate()-13); onFrom(toISO(d)); onTo(toISO(today)); }},
+    {label:"30d",   fn:()=>{ const d=new Date(today); d.setDate(d.getDate()-29); onFrom(toISO(d)); onTo(toISO(today)); }},
+    {label:"Este mês", fn:()=>{ const d=new Date(today.getFullYear(),today.getMonth(),1); onFrom(toISO(d)); onTo(toISO(today)); }},
+    {label:"Mês ant.", fn:()=>{
+      const first=new Date(today.getFullYear(),today.getMonth()-1,1);
+      const last=new Date(today.getFullYear(),today.getMonth(),0);
+      onFrom(toISO(first)); onTo(toISO(last));
+    }},
+    {label:"Tudo",  fn:()=>{ onFrom(""); onTo(""); }},
+  ];
+
+  const activeLabel=(()=>{
+    if(!dateFrom&&!dateTo) return "Tudo";
+    const days=dateFrom&&dateTo?Math.round((new Date(dateTo)-new Date(dateFrom))/(1000*60*60*24))+1:null;
+    if(days===7)  return "7d";
+    if(days===14) return "14d";
+    if(days===30) return "30d";
+    return null;
+  })();
+
   return(
-    <div style={{display:"flex",alignItems:"center",gap:8,background:T.card,
-      border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px"}}>
-      <span style={{fontSize:10,color:T.muted,fontFamily:"'Syne',sans-serif",
-        letterSpacing:"0.1em",textTransform:"uppercase",whiteSpace:"nowrap"}}>Período</span>
-      <input type="date" value={dateFrom} onChange={e=>onFrom(e.target.value)}
-        style={{border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 7px",fontSize:11,color:T.text,background:T.bg}}/>
-      <span style={{color:T.faint}}>→</span>
-      <input type="date" value={dateTo} onChange={e=>onTo(e.target.value)}
-        style={{border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 7px",fontSize:11,color:T.text,background:T.bg}}/>
-      <button onClick={()=>{onFrom("");onTo("");}}
-        style={{fontSize:10,color:T.muted,background:"none",border:"none",cursor:"pointer",padding:"2px 6px",
-          borderRadius:4,transition:"background 0.15s"}}>limpar</button>
+    <div style={{position:"relative"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,background:T.card,
+        border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 10px",flexWrap:"wrap"}}>
+        {/* Shortcuts */}
+        <span style={{fontSize:9,color:T.muted,fontFamily:"'Syne',sans-serif",
+          letterSpacing:"0.1em",textTransform:"uppercase",whiteSpace:"nowrap",marginRight:2}}>Período</span>
+        <div style={{display:"flex",gap:3}}>
+          {shortcuts.map(s=>(
+            <button key={s.label} onClick={s.fn} style={{
+              fontSize:10,padding:"3px 8px",borderRadius:20,cursor:"pointer",
+              fontFamily:"'Syne',sans-serif",fontWeight:600,letterSpacing:"0.04em",
+              border:`1px solid ${activeLabel===s.label?T.violet:T.border}`,
+              background:activeLabel===s.label?T.violetL:"transparent",
+              color:activeLabel===s.label?T.violet:T.muted,
+              transition:"all 0.12s",whiteSpace:"nowrap",
+            }}>{s.label}</button>
+          ))}
+        </div>
+        {/* Calendar toggle */}
+        <button onClick={()=>setOpen(o=>!o)} style={{
+          fontSize:10,padding:"3px 8px",borderRadius:6,cursor:"pointer",
+          border:`1px solid ${open?T.violet:T.border}`,fontFamily:"'Syne',sans-serif",
+          background:open?T.violetL:"transparent",color:open?T.violet:T.muted,
+          display:"flex",alignItems:"center",gap:4,fontWeight:600,
+        }}>
+          📅 {dateFrom||"início"} → {dateTo||"hoje"}
+        </button>
+      </div>
+      {/* Date inputs pop-up */}
+      {open&&(
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:200,
+          background:T.card,border:`1px solid ${T.border}`,borderRadius:10,
+          padding:"14px 16px",boxShadow:"0 8px 24px rgba(0,0,0,0.12)",
+          display:"flex",flexDirection:"column",gap:10,minWidth:260}}>
+          <div style={{fontSize:9,fontWeight:700,color:T.muted,letterSpacing:"0.12em",
+            textTransform:"uppercase",fontFamily:"'Syne',sans-serif"}}>Intervalo personalizado</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:9,color:T.faint,marginBottom:3}}>De</div>
+              <input type="date" value={dateFrom} onChange={e=>onFrom(e.target.value)}
+                style={{width:"100%",border:`1px solid ${T.border}`,borderRadius:6,
+                  padding:"5px 8px",fontSize:11,color:T.text,background:T.bg}}/>
+            </div>
+            <span style={{color:T.faint,marginTop:14}}>→</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:9,color:T.faint,marginBottom:3}}>Até</div>
+              <input type="date" value={dateTo} onChange={e=>onTo(e.target.value)}
+                style={{width:"100%",border:`1px solid ${T.border}`,borderRadius:6,
+                  padding:"5px 8px",fontSize:11,color:T.text,background:T.bg}}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+            <button onClick={()=>{onFrom("");onTo("");setOpen(false);}}
+              style={{fontSize:10,color:T.muted,background:"none",border:`1px solid ${T.border}`,
+                cursor:"pointer",padding:"4px 10px",borderRadius:6,fontFamily:"'Syne',sans-serif"}}>
+              Limpar
+            </button>
+            <button onClick={()=>setOpen(false)}
+              style={{fontSize:10,color:"#fff",background:T.violet,border:"none",
+                cursor:"pointer",padding:"4px 12px",borderRadius:6,fontFamily:"'Syne',sans-serif",fontWeight:700}}>
+              Aplicar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -575,8 +696,15 @@ function CountryCrossover({meta,shopify,rate}){
   return(
     <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
       <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-        <SectionTitle color={T.violet} mb={0}>Meta × Shopify por País</SectionTitle>
-        <div style={{display:"flex",gap:4}}>
+        <SectionTitle color={T.violet} mb={0}>Cruzamento por País</SectionTitle>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <ExportBtn data={sorted} filename="paises.csv" cols={[
+          {key:"country",label:"País"},{key:"metaSpend",label:"Gasto Meta"},
+          {key:"metaPurchases",label:"Compras Meta"},{key:"shopifyOrders",label:"Pedidos Shop"},
+          {key:"shopifyRevUSD",label:"Receita USD"},{key:"shopifyRevBRL",label:"Receita BRL"},
+          {key:"roasTotal",label:"ROAS Total"},{key:"roasAtrib",label:"ROAS Atrib"},
+          {key:"organic",label:"Orgânico"},{key:"gap",label:"Δ"},
+        ]}/>
           {[["roas","ROAS & Receita"],["funnel","Funil & CPM"]].map(([k,l])=>(
             <button key={k} onClick={()=>setView(k)} style={{
               fontSize:10,padding:"3px 10px",borderRadius:20,cursor:"pointer",
@@ -585,6 +713,7 @@ function CountryCrossover({meta,shopify,rate}){
               {l}
             </button>
           ))}
+        </div>
         </div>
       </div>
       {view==="roas"&&(
@@ -637,7 +766,6 @@ function SuggestionsPanel({meta,shopify,rate}){
   const bg={good:T.shopifyL,bad:"#fee2e2",warn:T.warnL,action:T.violetL};
   return(
     <div>
-      <SectionTitle color={T.violet}>Insights & Sugestões</SectionTitle>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {items.map((s,i)=>(
           <div key={i} style={{background:bg[s.type],border:`1px solid ${col[s.type]}40`,borderRadius:9,padding:"10px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -805,9 +933,7 @@ function MonthlyView({meta,shopify,rate}){
 
   return(
     <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
-      <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`}}>
-        <SectionTitle color={T.violet} mb={0}>Visão Mensal Consolidada</SectionTitle>
-      </div>
+
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
@@ -896,17 +1022,129 @@ function ConsolidatedTab({meta,shopify,rate}){
         <KPI label="CVR LPV→Compra" value={fmtPct(meta?.totals.cvr)}             accent={T.violet}/>
       </div>
 
-      <MonthlyView meta={meta} shopify={shopify} rate={rate}/>
-      <DailyChart data={dailyData}/>
-      <DailyAttributionTable meta={meta} shopify={shopify} rate={rate}/>
-      <CountryCrossover meta={meta} shopify={shopify} rate={rate}/>
-      <SuggestionsPanel meta={meta} shopify={shopify} rate={rate}/>
+      <Collapsible title="Visão Mensal Consolidada" color={T.violet}>
+        <MonthlyView meta={meta} shopify={shopify} rate={rate}/>
+      </Collapsible>
+      <Collapsible title="Tendência Diária" color={T.violet}>
+        <DailyChart data={dailyData}/>
+      </Collapsible>
+      <Collapsible title="Atribuição Diária — Meta vs Shopify" color={T.meta}>
+        <DailyAttributionTable meta={meta} shopify={shopify} rate={rate}/>
+      </Collapsible>
+      <Collapsible title="Meta × Shopify por País" color={T.violet}>
+        <CountryCrossover meta={meta} shopify={shopify} rate={rate}/>
+      </Collapsible>
+      <Collapsible title="Insights & Sugestões" color={T.warn}>
+        <SuggestionsPanel meta={meta} shopify={shopify} rate={rate}/>
+      </Collapsible>
+    </div>
+  );
+}
+
+
+/* ─── COLLAPSIBLE SECTION ────────────────────────────────── */
+function Collapsible({title, color, children, defaultOpen=true, extra=null}){
+  const[open,setOpen]=useState(defaultOpen);
+  return(
+    <div style={{marginBottom:20}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{
+        display:"flex",justifyContent:"space-between",alignItems:"center",
+        cursor:"pointer",padding:"8px 0",userSelect:"none",
+        borderBottom:`2px solid ${open?color:T.border}`,marginBottom:open?12:0,
+        transition:"border-color 0.15s",
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:9,fontWeight:700,color:open?color:T.muted,
+            letterSpacing:"0.16em",textTransform:"uppercase",
+            fontFamily:"'Syne',sans-serif"}}>{title}</span>
+          {extra}
+        </div>
+        <span style={{fontSize:10,color:T.faint,fontFamily:"'Syne',sans-serif",fontWeight:600,
+          transition:"transform 0.2s",display:"inline-block",transform:open?"":"rotate(-90deg)"}}>
+          ▼
+        </span>
+      </div>
+      {open&&<div>{children}</div>}
+    </div>
+  );
+}
+
+/* ─── EXPORT CSV BUTTON ──────────────────────────────────── */
+function ExportBtn({data, cols, filename}){
+  const doExport=()=>{
+    if(!data?.length)return;
+    const headers=cols.map(c=>c.label).join(",");
+    const rows=data.map(row=>
+      cols.map(c=>{
+        const v=row[c.key];
+        const str=v==null?"":String(v);
+        return str.includes(",")||str.includes('"')?`"${str.replace(/"/g,'""')}"`:str;
+      }).join(",")
+    );
+    const csv=[headers,...rows].join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=filename||"export.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+  return(
+    <button onClick={e=>{e.stopPropagation();doExport();}} style={{
+      fontSize:9,padding:"3px 9px",borderRadius:20,cursor:"pointer",
+      border:`1px solid ${T.border}`,background:"transparent",color:T.muted,
+      fontFamily:"'Syne',sans-serif",fontWeight:600,letterSpacing:"0.06em",
+      display:"flex",alignItems:"center",gap:4,
+    }}>↓ CSV</button>
+  );
+}
+
+
+/* ─── CREATIVE IMAGE CELL ────────────────────────────────── */
+function CreativeImageCell({adName, images, onUpload}){
+  const[uploading,setUploading]=useState(false);
+  const shortName=adName.trim().slice(0,80);
+  const url=images[shortName];
+
+  const handleFile=async(file)=>{
+    if(!file)return;
+    setUploading(true);
+    await onUpload(shortName, file);
+    setUploading(false);
+  };
+
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      {/* Thumbnail or placeholder */}
+      <label style={{cursor:"pointer",flexShrink:0}}>
+        <input type="file" accept="image/*" style={{display:"none"}}
+          onChange={e=>handleFile(e.target.files[0])}/>
+        {url?(
+          <img src={url} alt={shortName}
+            style={{width:44,height:44,objectFit:"cover",borderRadius:6,
+              border:`1.5px solid ${T.border}`,display:"block"}}
+            title="Clique para trocar"/>
+        ):(
+          <div style={{width:44,height:44,borderRadius:6,
+            border:`1.5px dashed ${T.faint}`,background:"#faf8f5",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:16,opacity:0.5}}
+            title="Clique para adicionar imagem">
+            {uploading?"⏳":"🖼"}
+          </div>
+        )}
+      </label>
+      {/* Name */}
+      <span style={{maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",
+        whiteSpace:"nowrap",fontSize:11,fontWeight:600,color:T.text}}
+        title={adName}>
+        {adName.split("|")[0].trim()}
+      </span>
     </div>
   );
 }
 
 /* ─── TAB: META ADS ──────────────────────────────────────── */
-function MetaTab({meta,shopify,rate,onFile}){
+function MetaTab({meta,shopify,rate,onFile,creativeImages,onImageUpload}){
   const[sub,setSub]=useState("overview");
 
   const creativeRows=useMemo(()=>{
@@ -917,6 +1155,8 @@ function MetaTab({meta,shopify,rate,onFile}){
       cpa:d.purchases>0?d.spend/d.purchases:0,
       cvr:d.lpv>0?(d.purchases/d.lpv)*100:0,
       costLpv:d.lpv>0?d.spend/d.lpv:0,
+      ctr:d.impressions>0?((d.clicks||0)/d.impressions)*100:0,
+      cpm:d.impressions>0?(d.spend/d.impressions)*1000:0,
     }));
   },[meta]);
 
@@ -967,29 +1207,33 @@ function MetaTab({meta,shopify,rate,onFile}){
 
           {sub==="overview"&&(
             <>
-              <SectionTitle color={T.meta}>Investimento & Alcance</SectionTitle>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:18}}>
-                <KPI label="Valor Gasto"   value={fmtR(meta.totals.spend)}      accent={T.meta}/>
-                <KPI label="Alcance"       value={fmt(meta.totals.reach)}        accent={T.meta}/>
-                <KPI label="Impressões"    value={fmt(meta.totals.impressions)}  accent={T.meta}/>
-                <KPI label="Cliques"       value={fmt(meta.totals.clicks)}       accent={T.meta}/>
-                <KPI label="CTR"           value={fmtPct(meta.totals.ctr)}       accent={T.meta}
-                  sub={meta.totals.ctr>=2?"bom":meta.totals.ctr>=0.5?"ok":"baixo"}/>
-                <KPI label="CPM"           value={fmtR(meta.totals.cpm)}         accent={T.meta}
-                  sub="custo/1000 impr."/>
-                <KPI label="CPC"           value={fmtR(meta.totals.cpc)}         accent={T.meta}
-                  sub="custo/clique"/>
-              </div>
-              <SectionTitle color={T.meta}>Funil de Conversão</SectionTitle>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
-                <KPI label="Vis. Pág."    value={fmt(meta.totals.lpv)}          accent={T.violet}/>
-                <KPI label="Custo/LPV"   value={fmtR(meta.totals.costLpv)}    accent={T.violet}/>
-                <KPI label="Add Carrinho" value={fmt(meta.totals.addCart)}      accent={T.warn}/>
-                <KPI label="Checkouts"   value={fmt(meta.totals.checkout)}     accent={T.warn}/>
-                <KPI label="Compras"     value={fmt(meta.totals.purchases)}    accent={T.good}/>
-                <KPI label="CPA"         value={fmtR(meta.totals.cpa)}        accent={T.good}/>
-                <KPI label="CVR LPV→Comp" value={fmtPct(meta.totals.cvr)}     accent={T.violet}/>
-              </div>
+              <Collapsible title="Investimento & Alcance" color={T.meta}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
+                  <KPI label="Valor Gasto"   value={fmtR(meta.totals.spend)}      accent={T.meta}/>
+                  <KPI label="Alcance"       value={fmt(meta.totals.reach)}        accent={T.meta}/>
+                  <KPI label="Impressões"    value={fmt(meta.totals.impressions)}  accent={T.meta}/>
+                  <KPI label="Frequência"    value={meta.totals.freqAvg>0?meta.totals.freqAvg.toFixed(2)+"×":"—"}  accent={T.meta}
+                    sub="média de exibições/pessoa"/>
+                  <KPI label="Cliques"       value={fmt(meta.totals.clicks)}       accent={T.meta}/>
+                  <KPI label="CTR"           value={fmtPct(meta.totals.ctr)}       accent={T.meta}
+                    sub={meta.totals.ctr>=2?"bom":meta.totals.ctr>=0.5?"ok":"baixo"}/>
+                  <KPI label="CPM"           value={fmtR(meta.totals.cpm)}         accent={T.meta}
+                    sub="custo/1000 impr."/>
+                  <KPI label="CPC"           value={fmtR(meta.totals.cpc)}         accent={T.meta}
+                    sub="custo/clique"/>
+                </div>
+              </Collapsible>
+              <Collapsible title="Funil de Conversão" color={T.violet}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
+                  <KPI label="Vis. Pág."    value={fmt(meta.totals.lpv)}          accent={T.violet}/>
+                  <KPI label="Custo/LPV"   value={fmtR(meta.totals.costLpv)}    accent={T.violet}/>
+                  <KPI label="Add Carrinho" value={fmt(meta.totals.addCart)}      accent={T.warn}/>
+                  {meta.totals.hasCheckout&&<KPI label="Finalizações" value={fmt(meta.totals.checkout)} accent={T.warn}/>}
+                  <KPI label="Compras"     value={fmt(meta.totals.purchases)}    accent={T.good}/>
+                  <KPI label="CPA"         value={fmtR(meta.totals.cpa)}        accent={T.good}/>
+                  <KPI label="CVR LPV→Comp" value={fmtPct(meta.totals.cvr)}     accent={T.violet}/>
+                </div>
+              </Collapsible>
             </>
           )}
 
@@ -1021,20 +1265,28 @@ function MetaTab({meta,shopify,rate,onFile}){
 
           {sub==="criativos"&&(
             <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <SectionTitle color={T.meta} mb={0}>Criativos — {sC.length} anúncios</SectionTitle>
+                <ExportBtn data={sC} filename="criativos.csv" cols={[
+                  {key:"name",label:"Criativo"},{key:"impressions",label:"Impressões"},
+                  {key:"lpv",label:"LPV"},{key:"addCart",label:"Cart"},
+                  {key:"purchases",label:"Compras"},{key:"spend",label:"Gasto"},
+                  {key:"cpa",label:"CPA"},{key:"costLpv",label:"R$/LPV"},
+                ]}/>
               </div>
               <DataTable sort={sortC} onSort={onSC}
                 emptyMsg="Exporte na aba Anúncios (não Conjuntos)"
                 cols={[
-                  {key:"name",       label:"Criativo",  align:"left", render:v=><span style={{maxWidth:220,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,color:T.text,fontSize:11}}>{v}</span>},
+                  {key:"name",       label:"Criativo",  align:"left", render:v=><CreativeImageCell adName={v} images={creativeImages||{}} onUpload={onImageUpload||(() => {})}/>},
                   {key:"impressions",label:"Impr.",      render:v=>fmt(v)},
                   {key:"lpv",        label:"LPV",        render:v=>fmt(v)},
                   {key:"addCart",    label:"Cart",       render:v=>fmt(v)},
                   {key:"purchases",  label:"Compras",    render:v=>fmt(v), color:v=>v>0?T.good:T.faint},
                   {key:"spend",      label:"Gasto",      render:v=>fmtR(v)},
                   {key:"cpa",        label:"CPA",        render:v=>v>0?fmtR(v):"—"},
-                  {key:"costLpv",    label:"R$/LPV",     render:v=>fmtR(v)},
+                  {key:"ctr",        label:"CTR",        render:v=>fmtPct(v), color:v=>v>=2?T.good:v>=0.5?T.warn:v>0?T.bad:T.faint},
+                  {key:"cpm",        label:"CPM",        render:v=>v>0?fmtR(v):"—"},
+                  {key:"costLpv",    label:"R$/LPV",     render:v=>v>0?fmtR(v):"—"},
                   {key:"cvr",        label:"CVR",        render:v=>fmtPct(v)},
                 ]}
                 rows={sC}/>
@@ -1196,8 +1448,9 @@ function PinterestTab({pinterest,onFile}){
 }
 
 /* ─── TAB: CAMPANHA CONFIG ───────────────────────────────── */
-function CampaignTab({meta, shopify, rate}){
+function CampaignTab({meta, shopify, rate, creativeImages, onImageUpload}){
   const roasGlobal = meta?.totals.spend>0&&shopify?(shopify.totalRevenue*rate)/meta.totals.spend:0;
+  const[drawerOpen,setDrawerOpen]=useState(false);
   const[cfg,setCfg]=useState({
     campaignName:"Vendas | Fev26",
     objective:"Vendas",
@@ -1226,27 +1479,143 @@ function CampaignTab({meta, shopify, rate}){
       }
     </div>
   );
+  const COUNTRY_FLAGS={"DE":"🇩🇪","ES":"🇪🇸","FR":"🇫🇷","GB":"🇬🇧","IE":"🇮🇪","NL":"🇳🇱","US":"🇺🇸","BR":"🇧🇷","IT":"🇮🇹","PT":"🇵🇹","AU":"🇦🇺","CA":"🇨🇦"};
+
   return(
     <div>
-      {meta&&(
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:16}}>
-          <SectionTitle color={T.meta}>Resultados da Campanha — {meta.rowCount} linhas · período selecionado</SectionTitle>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:10}}>
-            <KPI label="Gasto Total"    value={fmtR(meta.totals.spend)}         accent={T.meta}/>
-            <KPI label="Compras Meta"   value={fmt(meta.totals.purchases)}      accent={T.meta} sub="atribuição Meta"/>
-            <KPI label="CPA"            value={fmtR(meta.totals.cpa)}          accent={T.warn}/>
-            <KPI label="ROAS Global"    value={fmtX(roasGlobal)} large         accent={roasGlobal>=3?T.good:roasGlobal>=1?T.warn:roasGlobal>0?T.bad:T.border}/>
-            <KPI label="Pedidos Shop"   value={fmt(shopify?.totalOrders)}       accent={T.shopify}/>
-            <KPI label="Receita Shop"   value={fmtUSD(shopify?.totalRevenue)}   accent={T.shopify}/>
-            <KPI label="LPV"            value={fmt(meta.totals.lpv)}            accent={T.violet}/>
-            <KPI label="Checkout"       value={fmt(meta.totals.checkout)}       accent={T.warn}/>
+      {/* Campaign summary card — clickable */}
+      <div onClick={()=>setDrawerOpen(o=>!o)} style={{
+        background:T.card,border:`1.5px solid ${drawerOpen?T.meta:T.border}`,
+        borderRadius:12,padding:18,marginBottom:16,cursor:"pointer",
+        transition:"border-color 0.15s, box-shadow 0.15s",
+        boxShadow:drawerOpen?"0 0 0 3px "+T.metaL:"none",
+      }}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+          <div>
+            <div style={{fontSize:15,fontWeight:800,color:T.text,fontFamily:"'Syne',sans-serif",marginBottom:2}}>{cfg.campaignName}</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:10,background:T.metaL,color:T.meta,padding:"2px 8px",borderRadius:20,fontWeight:700}}>{cfg.objective}</span>
+              <span style={{fontSize:10,background:T.violetL,color:T.violet,padding:"2px 8px",borderRadius:20}}>{cfg.optimization.split("→")[0].trim()}</span>
+              <span style={{fontSize:10,background:"#f0fdf4",color:T.good,padding:"2px 8px",borderRadius:20}}>{cfg.budget}</span>
+              {cfg.countries.map(c=><span key={c} style={{fontSize:10,color:T.muted}}>{COUNTRY_FLAGS[c]||""}{c}</span>)}
+            </div>
           </div>
-          <div style={{fontSize:10,color:T.muted,marginTop:4}}>
-            Top país Meta: {Object.entries(meta.byCountry).sort((a,b)=>b[1].purchases-a[1].purchases)[0]?.[0]||"—"} &nbsp;·&nbsp;
-            Top criativo: {Object.entries(meta.byCreative).sort((a,b)=>b[1].purchases-a[1].purchases)[0]?.[0]?.split("|")[0]?.trim()||"—"}
+          <span style={{fontSize:11,color:T.muted,fontFamily:"'Syne',sans-serif",letterSpacing:"0.06em",marginTop:2}}>
+            {drawerOpen?"▲ fechar":"▼ expandir"}
+          </span>
+        </div>
+        {/* Inline results */}
+        {meta&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
+            {[
+              {l:"Gasto",    v:fmtR(meta.totals.spend),        c:T.meta},
+              {l:"Comp. Meta",v:fmt(meta.totals.purchases),    c:T.meta},
+              {l:"CPA",     v:fmtR(meta.totals.cpa),          c:T.warn},
+              {l:"ROAS",    v:fmtX(roasGlobal),               c:roasGlobal>=3?T.good:roasGlobal>=1?T.warn:roasGlobal>0?T.bad:T.faint},
+              {l:"Ped. Shop",v:fmt(shopify?.totalOrders),     c:T.shopify},
+              {l:"Rec. USD", v:fmtUSD(shopify?.totalRevenue), c:T.shopify},
+              {l:"LPV",     v:fmt(meta.totals.lpv),           c:T.violet},
+              {l:"CTR",     v:fmtPct(meta.totals.ctr),        c:T.meta},
+              {l:"CPM",     v:fmtR(meta.totals.cpm),          c:T.meta},
+              {l:"CPC",     v:fmtR(meta.totals.cpc),          c:T.meta},
+            ].map(k=>(
+              <div key={k.l} style={{background:T.bg,borderRadius:8,padding:"8px 10px",borderTop:`2px solid ${k.c}`}}>
+                <div style={{fontSize:8,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Syne',sans-serif",marginBottom:2}}>{k.l}</div>
+                <div style={{fontSize:14,fontWeight:700,color:k.c,fontFamily:"'Syne',sans-serif"}}>{k.v||"—"}</div>
+              </div>
+            ))}
           </div>
+        )}
+        {!meta&&<div style={{fontSize:11,color:T.faint,textAlign:"center",padding:"8px 0"}}>Suba o CSV do Meta para ver resultados</div>}
+      </div>
+
+      {/* Expanded drawer */}
+      {drawerOpen&&(
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:16,borderTop:`3px solid ${T.meta}`}}>
+          <SectionTitle color={T.meta}>Detalhes por Criativo</SectionTitle>
+          {meta?(
+            <div style={{overflowX:"auto",marginBottom:16}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:T.bg}}>
+                    {["Criativo","Impr.","LPV","Cart","Compras","Gasto","CPA","CTR","CPM"].map(h=>(
+                      <th key={h} style={{padding:"7px 10px",fontSize:9,color:T.muted,letterSpacing:"0.1em",
+                        textTransform:"uppercase",textAlign:h==="Criativo"?"left":"right",
+                        borderBottom:`2px solid ${T.border}`,fontFamily:"'Syne',sans-serif",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(meta.byCreative).sort((a,b)=>b[1].purchases-a[1].purchases).map(([name,d],i)=>{
+                    const cpa=d.purchases>0?d.spend/d.purchases:0;
+                    const cpm=d.impressions>0?(d.spend/d.impressions)*1000:0;
+                    const ctr=d.impressions>0?(d.clicks/d.impressions)*100:0;
+                    const shortName=name.split("|")[0].trim();
+                    return(
+                      <tr key={name} style={{background:i%2===0?T.card:"#faf8f5"}}>
+                        <td style={{padding:"7px 10px",maxWidth:240}}>
+                          <CreativeImageCell adName={name} images={creativeImages||{}} onUpload={onImageUpload||(() => {})}/>
+                        </td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmt(d.impressions)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.violet}}>{fmt(d.lpv)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.warn}}>{fmt(d.addCart)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",fontWeight:700,color:d.purchases>0?T.good:T.faint}}>{fmt(d.purchases)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(d.spend)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:cpa>0?T.text:T.faint}}>{cpa>0?fmtR(cpa):"—"}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:ctr>=2?T.good:ctr>=0.5?T.warn:ctr>0?T.bad:T.faint}}>{fmtPct(ctr)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmtR(cpm)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ):<div style={{fontSize:11,color:T.faint,padding:"12px 0"}}>Suba o CSV do Meta para ver criativos</div>}
+
+          <SectionTitle color={T.shopify}>Detalhes por País</SectionTitle>
+          {meta?(
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:T.bg}}>
+                    {["País","Gasto","Comp. Meta","Ped. Shop","Rec. USD","Rec. BRL","ROAS","CPA","CPM","CTR"].map(h=>(
+                      <th key={h} style={{padding:"7px 10px",fontSize:9,color:T.muted,letterSpacing:"0.1em",
+                        textTransform:"uppercase",textAlign:h==="País"?"left":"right",
+                        borderBottom:`2px solid ${T.border}`,fontFamily:"'Syne',sans-serif",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(meta.byCountry).sort((a,b)=>b[1].spend-a[1].spend).map(([country,d],i)=>{
+                    const sRev=shopify?.byCountry[country]?.revenue||0;
+                    const sOrd=shopify?.byCountry[country]?.orders||0;
+                    const revBRL=sRev*rate;
+                    const roas=d.spend>0&&revBRL>0?revBRL/d.spend:0;
+                    const cpa=d.purchases>0?d.spend/d.purchases:0;
+                    const cpm=d.impressions>0?(d.spend/d.impressions)*1000:0;
+                    const ctr=d.impressions>0?((d.clicks||0)/d.impressions)*100:0;
+                    return(
+                      <tr key={country} style={{background:i%2===0?T.card:"#faf8f5"}}>
+                        <td style={{padding:"7px 10px",fontSize:12,fontWeight:700,color:T.text}}>{COUNTRY_FLAGS[country]||""} {country}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(d.spend)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:d.purchases>0?T.meta:T.faint,fontWeight:d.purchases>0?700:400}}>{fmt(d.purchases)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:sOrd>0?T.shopify:T.faint,fontWeight:sOrd>0?700:400}}>{fmt(sOrd)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:sRev>0?T.good:T.faint}}>{fmtUSD(sRev)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:revBRL>0?T.good:T.faint}}>{fmtR(revBRL)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",fontWeight:700,color:roas>=3?T.good:roas>=1?T.warn:roas>0?T.bad:T.faint}}>{roas>0?fmtX(roas):"—"}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:cpa>0?T.text:T.faint}}>{cpa>0?fmtR(cpa):"—"}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmtR(cpm)}</td>
+                        <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:ctr>=2?T.good:ctr>=0.5?T.warn:ctr>0?T.bad:T.faint}}>{fmtPct(ctr)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ):<div style={{fontSize:11,color:T.faint,padding:"12px 0"}}>Suba o CSV do Meta para ver países</div>}
         </div>
       )}
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
       <div>
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:14}}>
@@ -1318,13 +1687,15 @@ export default function App(){
   const[metaRaw,setMetaRaw]=useState(null);
   const[shopifyRaw,setShopifyRaw]=useState(null);
   const[pintRaw,setPintRaw]=useState(null);
+  const[creativeImages,setCreativeImages]=useState({});
 
   // Load from Supabase on mount
   useEffect(()=>{
-    sbLoadAll().then(data=>{
+    Promise.all([sbLoadAll(), sbLoadCreativeImages()]).then(([data, imgs])=>{
       if(data.meta)      setMetaRaw(data.meta);
       if(data.shopify)   setShopifyRaw(data.shopify);
       if(data.pinterest) setPintRaw(data.pinterest);
+      setCreativeImages(imgs||{});
       setLoading(false);
     });
   },[]);
@@ -1375,7 +1746,15 @@ export default function App(){
       <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
         <div style={{maxWidth:1300,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"stretch",justifyContent:"space-between",height:52}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <img src="/logo.png" alt="Gallery Wall Mockups" style={{height:22,display:"block",objectFit:"contain"}}/>
+            <img src="/logo.png" alt="Gallery Wall Mockups"
+              onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}}
+              style={{height:22,display:"block",objectFit:"contain"}}/>
+            <div style={{display:"none",alignItems:"center",gap:8}}>
+              <div style={{width:26,height:26,background:T.text,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <span style={{color:"#fff",fontSize:13,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>G</span>
+              </div>
+              <span style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:"'Syne',sans-serif"}}>Gallery Wall Mockups</span>
+            </div>
             <div style={{fontSize:9,color:T.faint,letterSpacing:"0.1em",textTransform:"uppercase",borderLeft:`1px solid ${T.border}`,paddingLeft:10}}>Performance Dashboard</div>
           </div>
           <div style={{display:"flex",alignItems:"stretch"}}>
@@ -1422,10 +1801,10 @@ export default function App(){
       {/* Content */}
       <div style={{maxWidth:1300,margin:"0 auto",padding:"22px 24px"}}>
         {tab==="consolidated"&&<ConsolidatedTab meta={meta} shopify={shopify} rate={dollarRate}/>}
-        {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} onFile={readRaw(setMetaRaw,"meta")}/>}
+        {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} onFile={readRaw(setMetaRaw,"meta")} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
         {tab==="shopify"     &&<ShopifyTab shopify={shopify} onFile={readRaw(setShopifyRaw,"shopify")}/>}
         {tab==="pinterest"   &&<PinterestTab pinterest={pinterest} onFile={readRaw(setPintRaw,"pinterest")}/>}
-        {tab==="config"      &&<CampaignTab meta={meta} shopify={shopify} rate={dollarRate}/>}
+        {tab==="config"      &&<CampaignTab meta={meta} shopify={shopify} rate={dollarRate} creativeImages={creativeImages} onImageUpload={async(name,file)=>{const url=await sbUploadCreative(name,file);if(url)setCreativeImages(p=>({...p,[name]:url}));}}/>}
       </div>
     </div>
   );

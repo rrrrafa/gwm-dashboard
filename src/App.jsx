@@ -486,7 +486,6 @@ function parseShopify(text, dateFrom, dateTo) {
 }
   }
   // Convert sku Sets to arrays
-  for(const p of Object.values(byProduct)) p.skus=[...p.skus];
   return { totalOrders, totalRevenue, byCountry, byDay, byMonth, byProduct,
     avgTicket:totalOrders>0?totalRevenue/totalOrders:0 };
 }

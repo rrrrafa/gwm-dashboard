@@ -109,7 +109,7 @@ function parseMeta(text, dateFrom, dateTo) {
   });
 
   const totals = { reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0 };
-  const byCreative={}, byCountry={}, byCampaign={}, byDay={};
+  const byCreative={}, byCountry={}, byCampaign={}, byDay={}, byMonth={};
 
   for (const r of rows) {
     const reach=getNum(r,COL.reach), impressions=getNum(r,COL.impressions);
@@ -119,6 +119,7 @@ function parseMeta(text, dateFrom, dateTo) {
     const adName=getStr(r,COL.adName), campaign=getStr(r,COL.campaign);
     const adset=getStr(r,COL.adset), country=getStr(r,COL.country);
     const dateStr=getStr(r,COL.date).slice(0,10);
+    const monthStr=dateStr.slice(0,7); // "2026-02"
 
     totals.reach+=reach; totals.impressions+=impressions; totals.lpv+=lpv;
     totals.addCart+=addCart; totals.checkout+=checkout;
@@ -137,21 +138,32 @@ function parseMeta(text, dateFrom, dateTo) {
     add(byCampaign, campaign, ()=>({reach:0,impressions:0,lpv:0,addCart:0,checkout:0,purchases:0,spend:0,clicks:0}));
 
     if(country!=="—"){
-      if(!byCountry[country])byCountry[country]={purchases:0,spend:0,impressions:0,lpv:0,addCart:0};
+      if(!byCountry[country])byCountry[country]={purchases:0,spend:0,impressions:0,lpv:0,addCart:0,checkout:0,clicks:0};
       byCountry[country].purchases+=purchases; byCountry[country].spend+=spend;
       byCountry[country].impressions+=impressions; byCountry[country].lpv+=lpv;
-      byCountry[country].addCart+=addCart;
+      byCountry[country].addCart+=addCart; byCountry[country].checkout+=checkout;
+      byCountry[country].clicks+=clicks;
     }
     if(dateStr&&dateStr!=="—"){
       if(!byDay[dateStr])byDay[dateStr]={spend:0,purchases:0,impressions:0,lpv:0};
       byDay[dateStr].spend+=spend; byDay[dateStr].purchases+=purchases;
       byDay[dateStr].impressions+=impressions; byDay[dateStr].lpv+=lpv;
     }
+    if(monthStr&&monthStr!=="—"&&monthStr.length===7){
+      if(!byMonth[monthStr])byMonth[monthStr]={spend:0,purchases:0,impressions:0,lpv:0,addCart:0,checkout:0,clicks:0,reach:0};
+      byMonth[monthStr].spend+=spend; byMonth[monthStr].purchases+=purchases;
+      byMonth[monthStr].impressions+=impressions; byMonth[monthStr].lpv+=lpv;
+      byMonth[monthStr].addCart+=addCart; byMonth[monthStr].checkout+=checkout;
+      byMonth[monthStr].clicks+=clicks; byMonth[monthStr].reach+=reach;
+    }
   }
   totals.costLpv=totals.lpv>0?totals.spend/totals.lpv:0;
   totals.cpa=totals.purchases>0?totals.spend/totals.purchases:0;
   totals.cvr=totals.lpv>0?(totals.purchases/totals.lpv)*100:0;
-  return { totals, byCreative, byCountry, byCampaign, byDay, rowCount:rows.length };
+  totals.cpm=totals.impressions>0?(totals.spend/totals.impressions)*1000:0;
+  totals.cpc=totals.clicks>0?totals.spend/totals.clicks:0;
+  totals.ctr=totals.impressions>0?(totals.clicks/totals.impressions)*100:0;
+  return { totals, byCreative, byCountry, byCampaign, byDay, byMonth, rowCount:rows.length };
 }
 
 function parseShopify(text, dateFrom, dateTo) {
@@ -175,7 +187,7 @@ function parseShopify(text, dateFrom, dateTo) {
   }
 
   let totalOrders=0,totalRevenue=0;
-  const byCountry={},byDay={},byProduct={};
+  const byCountry={},byDay={},byProduct={},byMonth={};
 
   for(const o of Object.values(orders)){
     if(o.total===0)continue; // skip freebies
@@ -185,13 +197,16 @@ function parseShopify(text, dateFrom, dateTo) {
     if(o.date){
       if(!byDay[o.date])byDay[o.date]={orders:0,revenue:0};
       byDay[o.date].orders++; byDay[o.date].revenue+=o.total;
+      const m=o.date.slice(0,7);
+      if(!byMonth[m])byMonth[m]={orders:0,revenue:0};
+      byMonth[m].orders++; byMonth[m].revenue+=o.total;
     }
     for(const item of o.items){
       if(!byProduct[item])byProduct[item]={orders:0};
       byProduct[item].orders++;
     }
   }
-  return { totalOrders, totalRevenue, byCountry, byDay, byProduct,
+  return { totalOrders, totalRevenue, byCountry, byDay, byMonth, byProduct,
     avgTicket:totalOrders>0?totalRevenue/totalOrders:0 };
 }
 
@@ -244,44 +259,81 @@ function buildSuggestions(meta, shopify, rate){
   const t=meta.totals;
   const roasG=t.spend>0&&shopify?(shopify.totalRevenue*rate)/t.spend:0;
 
+  // ROAS global
   if(roasG>0){
-    if(roasG>=3)      out.push({type:"good",  title:`ROAS Global ${fmtX(roasG)} — campanha saudável`,    msg:"Budget pode ser escalado gradualmente (+20-30%/semana)."});
-    else if(roasG>=1) out.push({type:"warn",  title:`ROAS Global ${fmtX(roasG)} — positivo mas apertado`,msg:"Margem pequena. Foco em melhorar CVR ou aumentar ticket."});
-    else              out.push({type:"bad",   title:`ROAS Global ${fmtX(roasG)} — abaixo do breakeven`,  msg:`Receita ${fmtR(shopify.totalRevenue*rate)} vs gasto ${fmtR(t.spend)}.`});
+    if(roasG>=4)      out.push({type:"good",  title:`ROAS ${fmtX(roasG)} — excelente`,      msg:`Receita ${fmtR(shopify.totalRevenue*rate)} vs gasto ${fmtR(t.spend)}. Escale gradualmente +20-30%/semana mantendo ROAS acima de 3×.`});
+    else if(roasG>=2) out.push({type:"good",  title:`ROAS ${fmtX(roasG)} — campanha saudável`,msg:`Receita ${fmtR(shopify.totalRevenue*rate)} vs gasto ${fmtR(t.spend)}. Margem confortável para testar novos criativos.`});
+    else if(roasG>=1) out.push({type:"warn",  title:`ROAS ${fmtX(roasG)} — positivo mas apertado`,msg:`Receita ${fmtR(shopify.totalRevenue*rate)} vs gasto ${fmtR(t.spend)}. Foco em CVR ou aumentar ticket médio antes de escalar.`});
+    else              out.push({type:"bad",   title:`ROAS ${fmtX(roasG)} — abaixo do breakeven`,msg:`Receita ${fmtR(shopify.totalRevenue*rate)} vs gasto ${fmtR(t.spend)}. Pausar e revisar criativos + segmentação.`});
   }
 
+  // CPM alert
+  if(t.cpm>0){
+    if(t.cpm>80) out.push({type:"warn",title:`CPM alto: ${fmtR(t.cpm)}`,msg:`Custo por mil impressões acima de R$80. Público muito concorrido ou segmentação estreita. Considere expandir países ou faixas de idade.`});
+    else if(t.cpm<20) out.push({type:"good",title:`CPM eficiente: ${fmtR(t.cpm)}`,msg:`Boa eficiência de entrega. CTR ${fmtPct(t.ctr)} — se baixo, o problema está no criativo, não no público.`});
+  }
+
+  // CTR
+  if(t.ctr>0&&t.ctr<0.5)
+    out.push({type:"warn",title:`CTR baixo: ${fmtPct(t.ctr)}`,msg:`Menos de 0.5% dos usuários clicam. Testar novos hooks visuais, diferentes formatos (vídeo vs imagem) ou CTAs mais diretos.`});
+
+  // CVR LPV→Compra
+  if(t.lpv>0&&t.purchases>0){
+    const cvr=(t.purchases/t.lpv)*100;
+    if(cvr<1) out.push({type:"warn",title:`CVR LPV→Compra: ${fmtPct(cvr)}`,msg:`Só ${fmtPct(cvr)} das visitas viram compra. Revisar landing page, preço, frete ou fricção no checkout.`});
+    else if(cvr>5) out.push({type:"good",title:`CVR forte: ${fmtPct(cvr)} LPV→Compra`,msg:`Produto e página convertendo bem. Foco em aumentar volume de tráfego qualificado.`});
+  }
+
+  // Abandono de checkout
+  if(t.checkout>0&&t.purchases>0){
+    const cvr=(t.purchases/t.checkout)*100;
+    if(cvr<40) out.push({type:"warn",title:`${fmtPct(100-cvr)} de abandono no checkout`,msg:`Apenas ${fmtPct(cvr)} dos checkouts viram compra. Causas comuns: frete, método de pagamento, processo longo.`});
+  }
+
+  // Criativos
   const creatives=Object.entries(meta.byCreative)
     .map(([n,d])=>({name:n,...d,cpa:d.purchases>0?d.spend/d.purchases:9999}))
     .filter(c=>c.spend>5);
   if(creatives.length>1){
     const best=[...creatives].sort((a,b)=>a.cpa-b.cpa)[0];
     const worst=[...creatives].sort((a,b)=>b.cpa-a.cpa)[0];
+    const bestShort=best.name.split("|")[0].trim().slice(0,45);
+    const worstShort=worst.name.split("|")[0].trim().slice(0,45);
     if(best.purchases>0)
-      out.push({type:"good",  title:`Melhor criativo: ${best.name.slice(0,50)}…`, msg:`CPA ${fmtR(best.cpa)} · ${fmt(best.purchases)} compras. Teste variações desse criativo.`});
-    if(worst.cpa>best.cpa*2&&worst.purchases===0)
-      out.push({type:"action",title:`Pausar: ${worst.name.slice(0,50)}…`,        msg:`R$${worst.spend.toFixed(0)} gastos sem compras. Realoque para o criativo vencedor.`});
+      out.push({type:"good",title:`Vencedor: ${bestShort}`,msg:`CPA ${fmtR(best.cpa)} · ${fmt(best.purchases)} compras · gasto ${fmtR(best.spend)}. Teste variações — ângulos diferentes, thumbnails, textos.`});
+    if(worst.purchases===0&&worst.spend>20)
+      out.push({type:"action",title:`Pausar: ${worstShort}`,msg:`${fmtR(worst.spend)} gastos sem nenhuma compra. Realoque budget para o criativo vencedor.`});
   }
 
+  // Países
   const countries=Object.entries(meta.byCountry)
-    .filter(([,d])=>d.spend>3)
+    .filter(([,d])=>d.spend>5)
     .map(([c,d])=>({
-      c, ...d,
+      c,...d,
       sOrders:shopify?.byCountry[c]?.orders||0,
       sRev:shopify?.byCountry[c]?.revenue||0,
       roas:d.spend>0&&shopify?.byCountry[c]?.revenue?(shopify.byCountry[c].revenue*rate)/d.spend:0,
     }));
-  const bestC=countries.filter(x=>x.roas>0).sort((a,b)=>b.roas-a.roas)[0];
-  const worstC=countries.filter(x=>x.roas===0&&x.spend>15).sort((a,b)=>b.spend-a.spend)[0];
-  if(bestC?.roas>2)
-    out.push({type:"action",title:`Escalar orçamento em ${bestC.c}`,msg:`ROAS ${fmtX(bestC.roas)} · ${bestC.sOrders} pedidos Shopify · gasto ${fmtR(bestC.spend)}. País mais rentável.`});
-  if(worstC)
-    out.push({type:"warn",  title:`Revisar ${worstC.c}`,msg:`${fmtR(worstC.spend)} gastos sem pedidos Shopify. Pode ser delay de atribuição ou público errado.`});
-
-  if(t.checkout>0&&t.purchases>0){
-    const cvr=(t.purchases/t.checkout)*100;
-    if(cvr<40)
-      out.push({type:"warn",title:`Checkout com ${fmtPct(100-cvr)} de abandono`,msg:`Apenas ${fmtPct(cvr)} dos checkouts viram compra. Revisar friction no fluxo de pagamento.`});
+  if(countries.length){
+    const bestC=countries.filter(x=>x.roas>0).sort((a,b)=>b.roas-a.roas)[0];
+    const worstC=countries.filter(x=>x.sOrders===0&&x.spend>20).sort((a,b)=>b.spend-a.spend)[0];
+    const organicC=countries.filter(x=>x.sOrders>x.purchases).sort((a,b)=>(b.sOrders-b.purchases)-(a.sOrders-a.purchases))[0];
+    if(bestC?.roas>2)
+      out.push({type:"action",title:`Escalar: ${bestC.c} (ROAS ${fmtX(bestC.roas)})`,msg:`${bestC.sOrders} pedidos Shopify · gasto ${fmtR(bestC.spend)}. Melhor país — aumentar orçamento ou criar conjunto dedicado.`});
+    if(worstC)
+      out.push({type:"warn",title:`Revisar ${worstC.c}`,msg:`${fmtR(worstC.spend)} gastos, 0 pedidos Shopify. Pode ser delay de atribuição (aguardar 7 dias) ou público errado.`});
+    if(organicC&&organicC.sOrders-organicC.purchases>=2)
+      out.push({type:"good",title:`${organicC.c} tem tráfego orgânico forte`,msg:`${organicC.sOrders} pedidos Shopify vs ${organicC.purchases} atribuídos ao Meta. ${organicC.sOrders-organicC.purchases} vendas orgânicas/Pinterest/direto.`});
   }
+
+  // Orgânico geral
+  if(shopify&&meta){
+    const totalOrganic=Math.max(0,shopify.totalOrders-t.purchases);
+    const organicPct=shopify.totalOrders>0?(totalOrganic/shopify.totalOrders)*100:0;
+    if(organicPct>30)
+      out.push({type:"good",title:`${fmtPct(organicPct)} das vendas são orgânicas`,msg:`${totalOrganic} de ${shopify.totalOrders} pedidos sem atribuição Meta. Forte presença orgânica — considere investir em SEO/Pinterest.`});
+  }
+
   return out;
 }
 
@@ -475,6 +527,7 @@ function DailyChart({data}){
 
 /* ─── COUNTRY CROSSOVER ──────────────────────────────────── */
 function CountryCrossover({meta,shopify,rate}){
+  const[view,setView]=useState("roas"); // "roas" | "funnel"
   const rows=useMemo(()=>{
     const countries=new Set([
       ...Object.keys(meta?.byCountry||{}),
@@ -483,13 +536,30 @@ function CountryCrossover({meta,shopify,rate}){
     return Array.from(countries).map(c=>{
       const m=meta?.byCountry[c]||{};
       const s=shopify?.byCountry[c]||{};
-      const revBRL=(s.revenue||0)*rate;
+      const revUSD=s.revenue||0;
+      const revBRL=revUSD*rate;
+      const metaP=m.purchases||0;
+      const shopifyO=s.orders||0;
+      const spend=m.spend||0;
+      // ROAS total = toda receita Shopify do país / gasto Meta
+      const roasTotal=spend>0&&revBRL>0?revBRL/spend:0;
+      // ROAS atribuído = receita proporcional às compras que Meta reclama
+      // Assume que min(metaP, shopifyO) pedidos foram via Meta, resto é orgânico
+      const metaAttributed=Math.min(metaP, shopifyO);
+      const roasAtrib=spend>0&&shopifyO>0&&metaAttributed>0?(metaAttributed/shopifyO)*revBRL/spend:0;
+      const organic=Math.max(0, shopifyO-metaP);
+      const cpm=m.impressions>0?(spend/m.impressions)*1000:0;
+      const ctr=m.impressions>0?(m.clicks||0)/m.impressions*100:0;
+      const cpa=metaP>0?spend/metaP:0;
+      const cvr=m.lpv>0?(metaP/m.lpv)*100:0;
       return{
         country:c,
-        metaSpend:m.spend||0, metaPurchases:m.purchases||0, metaLPV:m.lpv||0, metaAddCart:m.addCart||0,
-        shopifyOrders:s.orders||0, shopifyRevUSD:s.revenue||0, shopifyRevBRL:revBRL,
-        roas:(m.spend||0)>0&&revBRL>0?revBRL/(m.spend||1):0,
-        gap:(m.purchases||0)-(s.orders||0),
+        metaSpend:spend, metaPurchases:metaP, metaLPV:m.lpv||0, metaAddCart:m.addCart||0,
+        metaCheckout:m.checkout||0, metaImpr:m.impressions||0, metaClicks:m.clicks||0,
+        shopifyOrders:shopifyO, shopifyRevUSD:revUSD, shopifyRevBRL:revBRL,
+        roasTotal, roasAtrib, organic,
+        cpm, ctr, cpa, cvr,
+        gap:metaP-shopifyO,
       };
     }).filter(r=>r.metaSpend>0||r.shopifyOrders>0);
   },[meta,shopify,rate]);
@@ -497,7 +567,7 @@ function CountryCrossover({meta,shopify,rate}){
   const{sorted,sort,onSort}=useSortable(rows,"shopifyOrders");
 
   if(!rows.length)return(
-    <div style={{background:T.metaL,borderRadius:10,padding:"14px 18px",fontSize:12,color:"#1e40af",lineHeight:1.6}}>
+    <div style={{background:T.metaL,borderRadius:10,padding:"14px 18px",fontSize:12,color:"#1e40af",lineHeight:1.6,marginBottom:20}}>
       Suba Meta Ads CSV + Shopify CSV para ver o cruzamento por país.
     </div>
   );
@@ -506,24 +576,53 @@ function CountryCrossover({meta,shopify,rate}){
     <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
       <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
         <SectionTitle color={T.violet} mb={0}>Meta × Shopify por País</SectionTitle>
-        <span style={{fontSize:10,color:T.faint}}>ROAS = receita Shopify (BRL) ÷ gasto Meta · Δ = compras Meta − pedidos Shopify</span>
+        <div style={{display:"flex",gap:4}}>
+          {[["roas","ROAS & Receita"],["funnel","Funil & CPM"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setView(k)} style={{
+              fontSize:10,padding:"3px 10px",borderRadius:20,cursor:"pointer",
+              border:`1px solid ${view===k?T.violet:T.border}`,fontFamily:"'Syne',sans-serif",fontWeight:700,
+              background:view===k?T.violetL:"transparent",color:view===k?T.violet:T.muted}}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
-      <DataTable sort={sort} onSort={onSort}
-        cols={[
-          {key:"country",       label:"País",         align:"left",  render:v=><b style={{color:T.text,fontSize:12}}>{v}</b>},
-          {key:"metaSpend",     label:"Gasto Meta",   render:v=>fmtR(v)},
-          {key:"metaLPV",       label:"LPV",          render:v=>fmt(v)},
-          {key:"metaAddCart",   label:"Cart",         render:v=>fmt(v)},
-          {key:"metaPurchases", label:"Compras Meta", render:v=>fmt(v), color:v=>v>0?T.meta:T.faint},
-          {key:"shopifyOrders", label:"Pedidos Shop", render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
-          {key:"shopifyRevUSD", label:"Receita USD",  render:v=>fmtUSD(v), color:v=>v>0?T.good:T.faint},
-          {key:"shopifyRevBRL", label:"Receita BRL",  render:v=>fmtR(v),   color:v=>v>0?T.good:T.faint},
-          {key:"roas",          label:"ROAS",         render:v=>fmtX(v), color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
-          {key:"gap",           label:"Δ",            render:v=>v===0?"=":(v>0?`+${v}`:`${v}`), color:v=>v===0?T.good:Math.abs(v)<=1?T.warn:T.bad},
-        ]}
-        rows={sorted}/>
-      <div style={{padding:"8px 16px",fontSize:10,color:T.faint,borderTop:`1px solid ${T.border}`,lineHeight:1.5}}>
-        Δ positivo = Meta reporta mais compras que o Shopify registra (over-attribution esperado). Δ negativo = pedidos Shopify sem origem Meta (orgânico/direto/Pinterest).
+      {view==="roas"&&(
+        <DataTable sort={sort} onSort={onSort}
+          cols={[
+            {key:"country",      label:"País",          align:"left", render:v=><b style={{color:T.text,fontSize:12}}>{v}</b>},
+            {key:"metaSpend",    label:"Gasto Meta",    render:v=>fmtR(v)},
+            {key:"metaPurchases",label:"Comp. Meta",    render:v=>fmt(v), color:v=>v>0?T.meta:T.faint},
+            {key:"shopifyOrders",label:"Ped. Shop",     render:v=>fmt(v), color:v=>v>0?T.shopify:T.faint},
+            {key:"shopifyRevUSD",label:"Rec. USD",      render:v=>fmtUSD(v), color:v=>v>0?T.good:T.faint},
+            {key:"shopifyRevBRL",label:"Rec. BRL",      render:v=>fmtR(v), color:v=>v>0?T.good:T.faint},
+            {key:"roasTotal",    label:"ROAS Total",    render:v=>fmtX(v), color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
+            {key:"roasAtrib",    label:"ROAS Atrib.",   render:v=>v>0?fmtX(v):"—", color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
+            {key:"organic",      label:"Orgânico",      render:v=>v>0?fmt(v):"—", color:v=>v>0?T.shopify:T.faint},
+            {key:"gap",          label:"Δ",             render:v=>v===0?"=":(v>0?`+${v}`:`${v}`), color:v=>v===0?T.good:Math.abs(v)<=1?T.warn:T.bad},
+          ]}
+          rows={sorted}/>
+      )}
+      {view==="funnel"&&(
+        <DataTable sort={sort} onSort={onSort}
+          cols={[
+            {key:"country",      label:"País",        align:"left", render:v=><b style={{color:T.text,fontSize:12}}>{v}</b>},
+            {key:"metaImpr",     label:"Impressões",  render:v=>fmt(v)},
+            {key:"metaClicks",   label:"Cliques",     render:v=>fmt(v)},
+            {key:"ctr",          label:"CTR",         render:v=>fmtPct(v), color:v=>v>=2?T.good:v>=0.5?T.warn:v>0?T.bad:T.faint},
+            {key:"cpm",          label:"CPM",         render:v=>fmtR(v), color:v=>v>0&&v<30?T.good:v<60?T.warn:v>0?T.bad:T.faint},
+            {key:"metaLPV",      label:"LPV",         render:v=>fmt(v)},
+            {key:"metaCheckout", label:"Checkout",    render:v=>fmt(v)},
+            {key:"metaPurchases",label:"Compras",     render:v=>fmt(v), color:v=>v>0?T.meta:T.faint},
+            {key:"cpa",          label:"CPA",         render:v=>v>0?fmtR(v):"—"},
+            {key:"cvr",          label:"CVR",         render:v=>fmtPct(v), color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
+          ]}
+          rows={sorted}/>
+      )}
+      <div style={{padding:"8px 16px",fontSize:10,color:T.faint,borderTop:`1px solid ${T.border}`,lineHeight:1.6}}>
+        <b style={{color:T.violet}}>ROAS Atrib.</b> = receita proporcional às compras que o Meta atribui ÷ gasto (estimativa conservadora). &nbsp;
+        <b style={{color:T.shopify}}>Orgânico</b> = pedidos Shopify acima da atribuição Meta. &nbsp;
+        <b>Δ positivo</b> = Meta reporta mais que Shopify (over-attribution normal).
       </div>
     </div>
   );
@@ -549,6 +648,223 @@ function SuggestionsPanel({meta,shopify,rate}){
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+
+/* ─── DAILY ATTRIBUTION TABLE ────────────────────────────── */
+function DailyAttributionTable({meta, shopify, rate}){
+  const[sort,setSort]=useState({key:"date",dir:"desc"});
+  const onSort=k=>setSort(s=>({key:k,dir:s.key===k&&s.dir==="desc"?"asc":"desc"}));
+
+  const rows = useMemo(()=>{
+    if(!meta&&!shopify) return [];
+    const days = new Set([
+      ...Object.keys(meta?.byDay||{}),
+      ...Object.keys(shopify?.byDay||{}),
+    ]);
+    return Array.from(days).map(date=>{
+      const m = meta?.byDay[date]||{spend:0,purchases:0};
+      const s = shopify?.byDay[date]||{orders:0,revenue:0};
+      const revBRL = s.revenue * rate;
+      const roas = m.spend>0 && s.revenue>0 ? revBRL/m.spend : null;
+      const gap = m.purchases - s.orders; // positive = meta over-attr; negative = organic
+      const organic = Math.max(0, s.orders - m.purchases); // orders not attributed to Meta
+      return { date, spend:m.spend, metaPurchases:m.purchases,
+               shopifyOrders:s.orders, shopifyRevUSD:s.revenue,
+               shopifyRevBRL:revBRL, roas, gap, organic };
+    });
+  },[meta,shopify,rate]);
+
+  const sorted = useMemo(()=>[...rows].sort((a,b)=>{
+    const v = k => a[k]??0;
+    const av=sort.key==="date"?a.date:a[sort.key];
+    const bv=sort.key==="date"?b.date:b[sort.key];
+    if(av==null&&bv==null)return 0; if(av==null)return 1; if(bv==null)return -1;
+    return sort.dir==="asc"?(av>bv?1:-1):(av<bv?1:-1);
+  }),[rows,sort]);
+
+  if(!rows.length) return null;
+
+  const totSpend    = rows.reduce((a,r)=>a+r.spend,0);
+  const totMetaP    = rows.reduce((a,r)=>a+r.metaPurchases,0);
+  const totShopifyO = rows.reduce((a,r)=>a+r.shopifyOrders,0);
+  const totRevUSD   = rows.reduce((a,r)=>a+r.shopifyRevUSD,0);
+  const totRevBRL   = rows.reduce((a,r)=>a+r.shopifyRevBRL,0);
+  const totOrganic  = rows.reduce((a,r)=>a+r.organic,0);
+  const totROAS     = totSpend>0&&totRevBRL>0?totRevBRL/totSpend:null;
+
+  const SH = ({k,label,align})=>(
+    <th onClick={()=>onSort(k)} style={{padding:"8px 12px",fontSize:9,fontWeight:700,
+      color:sort.key===k?T.meta:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",
+      textAlign:align||"right",cursor:"pointer",background:"#faf8f5",
+      borderBottom:`2px solid ${sort.key===k?T.meta:T.border}`,whiteSpace:"nowrap",fontFamily:"'Syne',sans-serif"}}>
+      {label}{sort.key===k?(sort.dir==="asc"?" ↑":" ↓"):""}
+    </th>
+  );
+
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
+      <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+        <SectionTitle color={T.violet} mb={0}>Atribuição Diária — Meta vs Shopify</SectionTitle>
+        <span style={{fontSize:10,color:T.faint}}>Orgânico = pedidos Shopify sem atribuição Meta · Δ = compras Meta − pedidos Shopify</span>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr>
+              <SH k="date"          label="Data"            align="left"/>
+              <SH k="spend"         label="Gasto Meta"/>
+              <SH k="metaPurchases" label="Compras Meta"  />
+              <SH k="shopifyOrders" label="Pedidos Shop"  />
+              <SH k="shopifyRevUSD" label="Receita USD"   />
+              <SH k="shopifyRevBRL" label="Receita BRL"   />
+              <SH k="roas"          label="ROAS"          />
+              <SH k="gap"           label="Δ"             />
+              <SH k="organic"       label="Orgânico est." />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r,i)=>{
+              const roasColor = r.roas==null?T.faint:r.roas>=3?T.good:r.roas>=1?T.warn:T.bad;
+              const gapColor  = r.gap===0?T.good:Math.abs(r.gap)<=1?T.warn:r.gap>0?T.meta:T.shopify;
+              return(
+                <tr key={r.date} style={{background:i%2===0?T.card:"#faf8f5"}}>
+                  <td style={{padding:"7px 12px",fontSize:11,fontWeight:600,color:T.text,whiteSpace:"nowrap"}}>{fmtDate(r.date)}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(r.spend)}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.metaPurchases>0?T.meta:T.faint,fontWeight:r.metaPurchases>0?700:400}}>{fmt(r.metaPurchases)}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyOrders>0?T.shopify:T.faint,fontWeight:r.shopifyOrders>0?700:400}}>{fmt(r.shopifyOrders)}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyRevUSD>0?T.good:T.faint}}>{fmtUSD(r.shopifyRevUSD)}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyRevBRL>0?T.good:T.faint}}>{fmtR(r.shopifyRevBRL)}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:roasColor,fontWeight:700}}>{r.roas!=null?fmtX(r.roas):"—"}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:gapColor,fontWeight:600}}>{r.gap===0?"=":(r.gap>0?`+${r.gap}`:r.gap)}</td>
+                  <td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.organic>0?T.shopify:T.faint,fontWeight:r.organic>0?700:400}}>{r.organic>0?fmt(r.organic):"—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{background:"#f0ece5",borderTop:`2px solid ${T.border}`}}>
+              <td style={{padding:"8px 12px",fontSize:10,fontWeight:800,color:T.text,fontFamily:"'Syne',sans-serif"}}>TOTAL</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.meta}}>{fmtR(totSpend)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.meta}}>{fmt(totMetaP)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.shopify}}>{fmt(totShopifyO)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.good}}>{fmtUSD(totRevUSD)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.good}}>{fmtR(totRevBRL)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:totROAS>=3?T.good:totROAS>=1?T.warn:T.bad}}>{totROAS?fmtX(totROAS):"—"}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.muted}}>{totMetaP-totShopifyO===0?"=":(totMetaP-totShopifyO>0?`+${totMetaP-totShopifyO}`:totMetaP-totShopifyO)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.shopify}}>{totOrganic>0?fmt(totOrganic):"—"}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div style={{padding:"8px 16px",fontSize:10,color:T.faint,borderTop:`1px solid ${T.border}`,lineHeight:1.6}}>
+        <b style={{color:T.shopify}}>Orgânico estimado</b> = pedidos Shopify acima do que o Meta atribui — origem provável: orgânico, Pinterest, busca direta. &nbsp;
+        <b style={{color:T.meta}}>Δ positivo</b> = Meta reporta mais que Shopify registra (over-attribution normal ~20%). &nbsp;
+        <b style={{color:T.good}}>ROAS</b> = receita Shopify convertida em BRL ÷ gasto Meta no mesmo dia.
+      </div>
+    </div>
+  );
+}
+
+
+/* ─── MONTHLY VIEW ───────────────────────────────────────── */
+function MonthlyView({meta,shopify,rate}){
+  const rows=useMemo(()=>{
+    const months=new Set([
+      ...Object.keys(meta?.byMonth||{}),
+      ...Object.keys(shopify?.byMonth||{}),
+    ]);
+    return Array.from(months).sort().map(m=>{
+      const md=meta?.byMonth[m]||{};
+      const sd=shopify?.byMonth[m]||{};
+      const revBRL=(sd.revenue||0)*rate;
+      const spend=md.spend||0;
+      const roas=spend>0&&revBRL>0?revBRL/spend:null;
+      const [yr,mo]=m.split("-");
+      const label=new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
+      return{month:m,label,spend,purchases:md.purchases||0,
+        shopifyOrders:sd.orders||0,revUSD:sd.revenue||0,revBRL,roas,
+        cpa:md.purchases>0?spend/md.purchases:0,
+        lpv:md.lpv||0,checkout:md.checkout||0};
+    });
+  },[meta,shopify,rate]);
+
+  const{sorted,sort,onSort}=useSortable(rows,"month");
+
+  if(!rows.length)return null;
+
+  const totSpend=rows.reduce((a,r)=>a+r.spend,0);
+  const totPurch=rows.reduce((a,r)=>a+r.purchases,0);
+  const totOrders=rows.reduce((a,r)=>a+r.shopifyOrders,0);
+  const totRevUSD=rows.reduce((a,r)=>a+r.revUSD,0);
+  const totRevBRL=rows.reduce((a,r)=>a+r.revBRL,0);
+  const totROAS=totSpend>0&&totRevBRL>0?totRevBRL/totSpend:null;
+
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
+      <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`}}>
+        <SectionTitle color={T.violet} mb={0}>Visão Mensal Consolidada</SectionTitle>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr>
+              {[["month","Mês","left"],["spend","Gasto Meta","right"],["purchases","Comp. Meta","right"],
+                ["shopifyOrders","Ped. Shop","right"],["revUSD","Rec. USD","right"],
+                ["revBRL","Rec. BRL","right"],["roas","ROAS","right"],
+                ["cpa","CPA","right"],["lpv","LPV","right"]].map(([k,l,a])=>(
+                <th key={k} onClick={()=>onSort(k)} style={{
+                  padding:"8px 12px",fontSize:9,fontWeight:700,color:sort.key===k?T.violet:T.muted,
+                  letterSpacing:"0.1em",textTransform:"uppercase",textAlign:a||"right",cursor:"pointer",
+                  background:"#faf8f5",borderBottom:`2px solid ${sort.key===k?T.violet:T.border}`,
+                  whiteSpace:"nowrap",fontFamily:"'Syne',sans-serif"}}>
+                  {l}{sort.key===k?(sort.dir==="asc"?" ↑":" ↓"):""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r,i)=>(
+              <tr key={r.month} style={{background:i%2===0?T.card:"#faf8f5"}}>
+                <td style={{padding:"8px 12px",fontSize:12,fontWeight:700,color:T.text,textAlign:"left",whiteSpace:"nowrap"}}>{r.label}</td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(r.spend)}</td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",color:r.purchases>0?T.meta:T.faint,fontWeight:r.purchases>0?700:400}}>{fmt(r.purchases)}</td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",color:r.shopifyOrders>0?T.shopify:T.faint,fontWeight:r.shopifyOrders>0?700:400}}>{fmt(r.shopifyOrders)}</td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",color:r.revUSD>0?T.good:T.faint}}>{fmtUSD(r.revUSD)}</td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",color:r.revBRL>0?T.good:T.faint}}>{fmtR(r.revBRL)}</td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,
+                  color:r.roas==null?T.faint:r.roas>=3?T.good:r.roas>=1?T.warn:T.bad}}>
+                  {r.roas!=null?fmtX(r.roas):"—"}
+                </td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",color:r.cpa>0?T.text:T.faint}}>{r.cpa>0?fmtR(r.cpa):"—"}</td>
+                <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",color:T.violet}}>{fmt(r.lpv)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{background:"#f0ece5",borderTop:`2px solid ${T.border}`}}>
+              <td style={{padding:"8px 12px",fontSize:10,fontWeight:800,color:T.text,fontFamily:"'Syne',sans-serif"}}>TOTAL</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.meta}}>{fmtR(totSpend)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.meta}}>{fmt(totPurch)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.shopify}}>{fmt(totOrders)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.good}}>{fmtUSD(totRevUSD)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.good}}>{fmtR(totRevBRL)}</td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,
+                color:totROAS>=3?T.good:totROAS>=1?T.warn:totROAS>0?T.bad:T.faint}}>
+                {totROAS?fmtX(totROAS):"—"}
+              </td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.muted}}>
+                {totPurch>0?fmtR(totSpend/totPurch):"—"}
+              </td>
+              <td style={{padding:"8px 12px",fontSize:11,textAlign:"right",fontWeight:700,color:T.violet}}>
+                {fmt(rows.reduce((a,r)=>a+r.lpv,0))}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   );
@@ -580,7 +896,9 @@ function ConsolidatedTab({meta,shopify,rate}){
         <KPI label="CVR LPV→Compra" value={fmtPct(meta?.totals.cvr)}             accent={T.violet}/>
       </div>
 
+      <MonthlyView meta={meta} shopify={shopify} rate={rate}/>
       <DailyChart data={dailyData}/>
+      <DailyAttributionTable meta={meta} shopify={shopify} rate={rate}/>
       <CountryCrossover meta={meta} shopify={shopify} rate={rate}/>
       <SuggestionsPanel meta={meta} shopify={shopify} rate={rate}/>
     </div>
@@ -650,21 +968,27 @@ function MetaTab({meta,shopify,rate,onFile}){
           {sub==="overview"&&(
             <>
               <SectionTitle color={T.meta}>Investimento & Alcance</SectionTitle>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:10,marginBottom:18}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:18}}>
                 <KPI label="Valor Gasto"   value={fmtR(meta.totals.spend)}      accent={T.meta}/>
                 <KPI label="Alcance"       value={fmt(meta.totals.reach)}        accent={T.meta}/>
                 <KPI label="Impressões"    value={fmt(meta.totals.impressions)}  accent={T.meta}/>
                 <KPI label="Cliques"       value={fmt(meta.totals.clicks)}       accent={T.meta}/>
+                <KPI label="CTR"           value={fmtPct(meta.totals.ctr)}       accent={T.meta}
+                  sub={meta.totals.ctr>=2?"bom":meta.totals.ctr>=0.5?"ok":"baixo"}/>
+                <KPI label="CPM"           value={fmtR(meta.totals.cpm)}         accent={T.meta}
+                  sub="custo/1000 impr."/>
+                <KPI label="CPC"           value={fmtR(meta.totals.cpc)}         accent={T.meta}
+                  sub="custo/clique"/>
               </div>
-              <SectionTitle color={T.meta}>Funil</SectionTitle>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:10}}>
+              <SectionTitle color={T.meta}>Funil de Conversão</SectionTitle>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
                 <KPI label="Vis. Pág."    value={fmt(meta.totals.lpv)}          accent={T.violet}/>
                 <KPI label="Custo/LPV"   value={fmtR(meta.totals.costLpv)}    accent={T.violet}/>
                 <KPI label="Add Carrinho" value={fmt(meta.totals.addCart)}      accent={T.warn}/>
                 <KPI label="Checkouts"   value={fmt(meta.totals.checkout)}     accent={T.warn}/>
                 <KPI label="Compras"     value={fmt(meta.totals.purchases)}    accent={T.good}/>
                 <KPI label="CPA"         value={fmtR(meta.totals.cpa)}        accent={T.good}/>
-                <KPI label="CVR"         value={fmtPct(meta.totals.cvr)}      accent={T.violet}/>
+                <KPI label="CVR LPV→Comp" value={fmtPct(meta.totals.cvr)}     accent={T.violet}/>
               </div>
             </>
           )}
@@ -872,7 +1196,8 @@ function PinterestTab({pinterest,onFile}){
 }
 
 /* ─── TAB: CAMPANHA CONFIG ───────────────────────────────── */
-function CampaignTab(){
+function CampaignTab({meta, shopify, rate}){
+  const roasGlobal = meta?.totals.spend>0&&shopify?(shopify.totalRevenue*rate)/meta.totals.spend:0;
   const[cfg,setCfg]=useState({
     campaignName:"Vendas | Fev26",
     objective:"Vendas",
@@ -888,21 +1213,41 @@ function CampaignTab(){
     placements:"Automático (Advantage+)",
     notes:"",
   });
-  const set=(k,v)=>setCfg(c=>({...c,[k]:v}));
+  const setF=(k,v)=>setCfg(c=>({...c,[k]:v}));
   const[newC,setNewC]=useState("");
   const F=({label,k,multi,rows=3})=>(
     <div style={{marginBottom:13}}>
       <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{label}</div>
       {multi
-        ?<textarea value={cfg[k]} onChange={e=>set(k,e.target.value)} rows={rows}
+        ?<textarea value={cfg[k]} onChange={e=>setF(k,e.target.value)} rows={rows}
            style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 10px",fontSize:11,resize:"vertical",lineHeight:1.6}}/>
-        :<input value={cfg[k]} onChange={e=>set(k,e.target.value)}
+        :<input value={cfg[k]} onChange={e=>setF(k,e.target.value)}
            style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 10px",fontSize:11}}/>
       }
     </div>
   );
   return(
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+    <div>
+      {meta&&(
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:16}}>
+          <SectionTitle color={T.meta}>Resultados da Campanha — {meta.rowCount} linhas · período selecionado</SectionTitle>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:10}}>
+            <KPI label="Gasto Total"    value={fmtR(meta.totals.spend)}         accent={T.meta}/>
+            <KPI label="Compras Meta"   value={fmt(meta.totals.purchases)}      accent={T.meta} sub="atribuição Meta"/>
+            <KPI label="CPA"            value={fmtR(meta.totals.cpa)}          accent={T.warn}/>
+            <KPI label="ROAS Global"    value={fmtX(roasGlobal)} large         accent={roasGlobal>=3?T.good:roasGlobal>=1?T.warn:roasGlobal>0?T.bad:T.border}/>
+            <KPI label="Pedidos Shop"   value={fmt(shopify?.totalOrders)}       accent={T.shopify}/>
+            <KPI label="Receita Shop"   value={fmtUSD(shopify?.totalRevenue)}   accent={T.shopify}/>
+            <KPI label="LPV"            value={fmt(meta.totals.lpv)}            accent={T.violet}/>
+            <KPI label="Checkout"       value={fmt(meta.totals.checkout)}       accent={T.warn}/>
+          </div>
+          <div style={{fontSize:10,color:T.muted,marginTop:4}}>
+            Top país Meta: {Object.entries(meta.byCountry).sort((a,b)=>b[1].purchases-a[1].purchases)[0]?.[0]||"—"} &nbsp;·&nbsp;
+            Top criativo: {Object.entries(meta.byCreative).sort((a,b)=>b[1].purchases-a[1].purchases)[0]?.[0]?.split("|")[0]?.trim()||"—"}
+          </div>
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
       <div>
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:18,marginBottom:14}}>
           <SectionTitle color={T.meta}>Estrutura da Campanha</SectionTitle>
@@ -929,12 +1274,12 @@ function CampaignTab(){
                 <span key={c} style={{fontSize:11,background:T.metaL,color:T.meta,padding:"2px 9px",borderRadius:20,
                   border:`1px solid ${T.meta}30`,display:"flex",gap:4,alignItems:"center"}}>
                   {c}
-                  <button onClick={()=>set("countries",cfg.countries.filter(x=>x!==c))}
+                  <button onClick={()=>setF("countries",cfg.countries.filter(x=>x!==c))}
                     style={{background:"none",border:"none",cursor:"pointer",color:"#93c5fd",fontSize:12,lineHeight:1}}>×</button>
                 </span>
               ))}
               <input value={newC} onChange={e=>setNewC(e.target.value)}
-                onKeyDown={e=>{if(e.key==="Enter"&&newC.trim()){set("countries",[...cfg.countries,newC.trim().toUpperCase()]);setNewC("");}}}
+                onKeyDown={e=>{if(e.key==="Enter"&&newC.trim()){setF("countries",[...cfg.countries,newC.trim().toUpperCase()]);setNewC("");}}}
                 placeholder="+ país" style={{fontSize:11,background:T.metaL,border:`1px dashed #93c5fd`,
                 borderRadius:20,padding:"2px 9px",color:T.meta,width:68}}/>
             </div>
@@ -943,7 +1288,7 @@ function CampaignTab(){
             {[["ageMin","Idade mín."],["ageMax","Idade máx."],["gender","Gênero"]].map(([k,l])=>(
               <div key={k}>
                 <div style={{fontSize:9,color:T.muted,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Syne',sans-serif"}}>{l}</div>
-                <input value={cfg[k]} onChange={e=>set(k,e.target.value)}
+                <input value={cfg[k]} onChange={e=>setF(k,e.target.value)}
                   style={{width:"100%",background:"#faf8f5",border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",fontSize:11}}/>
               </div>
             ))}
@@ -956,6 +1301,7 @@ function CampaignTab(){
           <F label="Posicionamentos" k="placements"/>
         </div>
       </div>
+    </div>
     </div>
   );
 }
@@ -1028,14 +1374,9 @@ export default function App(){
       {/* Header */}
       <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
         <div style={{maxWidth:1300,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"stretch",justifyContent:"space-between",height:52}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:28,height:28,background:T.text,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{color:"#fff",fontSize:14,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>G</span>
-            </div>
-            <div>
-              <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:"'Syne',sans-serif",letterSpacing:"-0.01em",lineHeight:1.1}}>Gallery Wall Mockups</div>
-              <div style={{fontSize:9,color:T.faint,letterSpacing:"0.1em",textTransform:"uppercase"}}>Performance Dashboard</div>
-            </div>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <img src="/logo.png" alt="Gallery Wall Mockups" style={{height:22,display:"block",objectFit:"contain"}}/>
+            <div style={{fontSize:9,color:T.faint,letterSpacing:"0.1em",textTransform:"uppercase",borderLeft:`1px solid ${T.border}`,paddingLeft:10}}>Performance Dashboard</div>
           </div>
           <div style={{display:"flex",alignItems:"stretch"}}>
             {TABS.map(t=>(
@@ -1084,7 +1425,7 @@ export default function App(){
         {tab==="meta"        &&<MetaTab meta={meta} shopify={shopify} rate={dollarRate} onFile={readRaw(setMetaRaw,"meta")}/>}
         {tab==="shopify"     &&<ShopifyTab shopify={shopify} onFile={readRaw(setShopifyRaw,"shopify")}/>}
         {tab==="pinterest"   &&<PinterestTab pinterest={pinterest} onFile={readRaw(setPintRaw,"pinterest")}/>}
-        {tab==="config"      &&<CampaignTab/>}
+        {tab==="config"      &&<CampaignTab meta={meta} shopify={shopify} rate={dollarRate}/>}
       </div>
     </div>
   );

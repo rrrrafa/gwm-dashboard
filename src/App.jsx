@@ -542,7 +542,7 @@ function buildDailyData(metaByDay, shopifyByDay, rate){
 }
 
 /* ─── SUGGESTIONS ────────────────────────────────────────── */
-function buildSuggestions(meta, shopify, rate){
+function buildSuggestions(meta, shopify, rate, pinterest=null){
   const out=[];
   if(!meta)return out;
   const t=meta.totals;
@@ -954,9 +954,10 @@ function CountryCrossover({meta,shopify,pinterest,rate}){
         roasTotal, roasAtrib, organic,
         cpm, ctr, cpa, cvr,
         gap:metaP-shopifyO,
+        pintImpr:p.impressions||0, pintClicks:p.clicks||0, pintSpend:p.spend||0,
       };
     }).filter(r=>r.metaSpend>0||r.shopifyOrders>0);
-  },[meta,shopify,rate]);
+  },[meta,shopify,pinterest,rate]);
 
   const{sorted,sort,onSort}=useSortable(rows,"shopifyOrders");
 
@@ -1000,7 +1001,12 @@ function CountryCrossover({meta,shopify,pinterest,rate}){
             {key:"roasTotal",    label:"ROAS Total",    render:v=>fmtX(v), color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
             {key:"roasAtrib",    label:"ROAS Atrib.",   render:v=>v>0?fmtX(v):"—", color:v=>v>=3?T.good:v>=1?T.warn:v>0?T.bad:T.faint},
             {key:"organic",      label:"Orgânico",      render:v=>v>0?fmt(v):"—", color:v=>v>0?T.shopify:T.faint},
-            {key:"gap",          label:"Δ",             render:v=>v===0?"=":(v>0?`+${v}`:`${v}`), color:v=>v===0?T.good:Math.abs(v)<=1?T.warn:T.bad},
+            {key:"gap",          label:"Δ",             tip:"Δ positivo = Meta over-atribui vs Shopify. Δ negativo = vendas orgânicas/Pinterest/direto não capturadas pelo Meta", render:v=>v===0?"=":(v>0?`+${v}`:`${v}`), color:v=>v===0?T.good:Math.abs(v)<=1?T.warn:T.bad},
+            ...(pinterest?.byCountry&&Object.keys(pinterest.byCountry).length>0?[
+              {key:"pintImpr",   label:"Pint. Impr.",  tip:"Impressões do Pinterest neste país", render:v=>v>0?fmt(v):"—",    color:v=>v>0?T.pinterest:T.faint},
+              {key:"pintClicks", label:"Pint. Clk.",   tip:"Cliques do Pinterest neste país",    render:v=>v>0?fmt(v):"—",    color:v=>v>0?T.pinterest:T.faint},
+              {key:"pintSpend",  label:"Pint. Gasto",  tip:"Gasto Pinterest em USD",             render:v=>v>0?fmtUSD(v):"—", color:v=>v>0?T.pinterest:T.faint},
+            ]:[]),
           ]}
           rows={sorted}/>
       )}
@@ -1031,7 +1037,7 @@ function CountryCrossover({meta,shopify,pinterest,rate}){
 
 /* ─── SUGGESTIONS PANEL ──────────────────────────────────── */
 function SuggestionsPanel({meta,shopify,pinterest,rate}){
-  const items=useMemo(()=>buildSuggestions(meta,shopify,rate),[meta,shopify,rate]);
+  const items=useMemo(()=>buildSuggestions(meta,shopify,rate,pinterest),[meta,shopify,pinterest,rate]);
   if(!items.length)return null;
   const icon={good:"✓",bad:"✗",warn:"⚠",action:"→"};
   const col={good:T.good,bad:T.bad,warn:T.warn,action:T.violet};

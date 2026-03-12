@@ -17,7 +17,7 @@ const sbH = {"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`
 async function sbSave(type,content){try{await fetch(`${SB_URL}/rest/v1/csv_files`,{method:"POST",headers:{...sbH,"Prefer":"resolution=merge-duplicates"},body:JSON.stringify({type,content})});}catch(e){console.warn(e);}}
 async function sbDelete(type){try{await fetch(`${SB_URL}/rest/v1/csv_files?type=eq.${type}`,{method:"DELETE",headers:sbH});}catch(e){}}
 async function sbLoadAll(){try{const r=await fetch(`${SB_URL}/rest/v1/csv_files?select=type,content`,{headers:sbH});if(!r.ok)return{};const rows=await r.json();const out={};for(const x of rows)out[x.type]=x.content;return out;}catch{return{};}}
-async function sbUploadCreative(adName,file){try{const ext=file.name.split('.').pop();const safeKey=adName.trim().slice(0,80).replace(/[^a-zA-Z0-9 _\-\.]/g,'_');const key=encodeURIComponent(safeKey)+'.'+ext;const r=await fetch(`${SB_URL}/storage/v1/object/creatives/${key}`,{method:'POST',headers:{...sbH,'x-upsert':'true','Content-Type':file.type},body:file});if(!r.ok){console.warn(await r.text());return null;}return{url:`${SB_URL}/storage/v1/object/public/creatives/${key}`,key:safeKey};}catch(e){console.warn(e);return null;}}
+async function sbUploadCreative(adName,file){try{const ext=file.name.split('.').pop();const safeKey=(adName||"").trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9 _\-\.]/g,'_').slice(0,80);const key=encodeURIComponent(safeKey)+'.'+ext;const r=await fetch(`${SB_URL}/storage/v1/object/creatives/${key}`,{method:'POST',headers:{...sbH,'x-upsert':'true','Content-Type':file.type},body:file});if(!r.ok){console.warn(await r.text());return null;}return{url:`${SB_URL}/storage/v1/object/public/creatives/${key}`,key:safeKey};}catch(e){console.warn(e);return null;}}
 async function sbLoadCreativeImages(){try{const r=await fetch(`${SB_URL}/storage/v1/object/list/creatives`,{method:'POST',headers:{...sbH,'Content-Type':'application/json'},body:JSON.stringify({prefix:'',limit:500})});if(!r.ok)return{};const files=await r.json();const map={};for(const f of files){if(!f.name)continue;const decoded=decodeURIComponent(f.name.replace(/\.[^.]+$/,''));map[decoded]=`${SB_URL}/storage/v1/object/public/creatives/${f.name}`;}return map;}catch{return{};}}
 async function sbLoadExpenses(){try{const r=await fetch(`${SB_URL}/rest/v1/expenses?select=*&order=date.desc`,{headers:sbH});if(!r.ok)return[];return await r.json();}catch{return[];}}
 async function sbAddExpense(exp){try{const r=await fetch(`${SB_URL}/rest/v1/expenses`,{method:"POST",headers:{...sbH,"Prefer":"return=representation"},body:JSON.stringify(exp)});if(!r.ok)return null;const rows=await r.json();return rows[0];}catch{return null;}}
@@ -917,9 +917,9 @@ function DailyAttributionTable({meta,shopify,rate}){
                 {show("date")&&<td style={{padding:"7px 12px",fontSize:11,fontWeight:600,color:T.text}}>{fmtDate(r.date)}</td>}
                 {show("spend")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:T.meta}}>{fmtR(r.spend)}</td>}
                 {show("metaPurchases")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.metaPurchases>0?T.meta:T.faint,fontWeight:r.metaPurchases>0?700:400}}>{fmt(r.metaPurchases)}</td>}
-                {show("shopifyOrders")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyOrders>0?T.shopify:T.faint,fontWeight:r.shopifyOrders>0?700:400}}>{fmt(r.shopifyOrders)}</td>}
-                {show("shopifyRevUSD")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyRevUSD>0?T.good:T.faint}}>{fmtUSD(r.shopifyRevUSD)}</td>}
-                {show("shopifyRevBRL")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyRevBRL>0?T.good:T.faint}}>{fmtR(r.shopifyRevBRL)}</td>}
+                {show("shopifyOrders")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyOrders>0?T.shopify:T.faint,fontWeight:r.shopifyOrders>0?700:400,background:`${T.shopify}0a`}}>{fmt(r.shopifyOrders)}</td>}
+                {show("shopifyRevUSD")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyRevUSD>0?T.good:T.faint,background:`${T.shopify}0a`}}>{fmtUSD(r.shopifyRevUSD)}</td>}
+                {show("shopifyRevBRL")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.shopifyRevBRL>0?T.good:T.faint,background:`${T.shopify}0a`}}>{fmtR(r.shopifyRevBRL)}</td>}
                 {show("roas")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:roasColor,fontWeight:700}}>{r.roas!=null?fmtX(r.roas):"—"}</td>}
                 {show("gap")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.gap===0?T.good:Math.abs(r.gap)<=1?T.warn:r.gap>0?T.meta:T.shopify,fontWeight:600}}>{r.gap===0?"=":(r.gap>0?`+${r.gap}`:r.gap)}</td>}
                 {show("organic")&&<td style={{padding:"7px 12px",fontSize:11,textAlign:"right",color:r.organic>0?T.shopify:T.faint,fontWeight:r.organic>0?700:400}}>{r.organic>0?fmt(r.organic):"—"}</td>}
@@ -1075,11 +1075,13 @@ function ObjectivePanel({meta,shopify,rate}){
 /* ════════════════════════════════════════════════════════════
    CREATIVE IMAGE CELL
 ════════════════════════════════════════════════════════════ */
+function normImgKey(s){return(s||"").trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9 _\-\.]/g,"_").slice(0,80);}
 function CreativeImageCell({adName,images,onUpload}){
   const T=useT();
   const[uploading,setUploading]=useState(false);
-  const shortName=adName.trim().replace(/[^a-zA-Z0-9 _\-\.]/g,'_').slice(0,80);
-  const url=images[shortName]||images[adName.trim().slice(0,80)]||Object.entries(images).find(([k])=>k.startsWith(adName.trim().slice(0,40)))?.[1];
+  const n=adName||"";
+  const k1=normImgKey(n);const k2=n.trim().slice(0,80);const k3=n.trim().replace(/[^a-zA-Z0-9 _\-\.]/g,"_").slice(0,80);
+  const url=images[k1]||images[k2]||images[k3]||Object.entries(images).find(([k])=>k&&n.trim().length>10&&(k.startsWith(n.trim().slice(0,30))||normImgKey(k).startsWith(normImgKey(n).slice(0,30))))?.[1];
   const handleFile=async(file)=>{if(!file)return;setUploading(true);await onUpload(adName,file);setUploading(false);};
   return(
     <label style={{cursor:"pointer",flexShrink:0}}>
@@ -1104,6 +1106,7 @@ function CreativesTable({rows,sort,onSort,images,onImageUpload}){
   const[expanded,setExpanded]=useState(null);
   const allCols=[
     {key:"name",label:"Criativo",align:"left"},{key:"objetivo",label:"Objetivo",align:"left"},
+    {key:"produto",label:"Produto",align:"left"},
     {key:"reach",label:"Alcance"},{key:"impressions",label:"Impr."},{key:"freq",label:"Freq."},
     {key:"clicks",label:"Cliques"},{key:"ctr",label:"CTR"},{key:"cpm",label:"CPM"},{key:"cpc",label:"CPC"},
     {key:"lpv",label:"LPV"},{key:"addCart",label:"Cart"},{key:"purchases",label:"Compras"},
@@ -1131,6 +1134,7 @@ function CreativesTable({rows,sort,onSort,images,onImageUpload}){
           <thead><tr>
             {visibleCols.includes(allCols[0])||true?TH("name","Criativo","left"):null}
             {visibleCols.find(c=>c.key==="objetivo")&&TH("objetivo","Objetivo","left")}
+            {visibleCols.find(c=>c.key==="produto")&&TH("produto","Produto","left","Produto/categoria extraído do nome do anúncio")}
             {visibleCols.find(c=>c.key==="reach")&&TH("reach","Alcance")}
             {visibleCols.find(c=>c.key==="impressions")&&TH("impressions","Impr.")}
             {visibleCols.find(c=>c.key==="freq")&&TH("freq","Freq.","right","Frequência média de exibição. >3× = fadiga criativa provável")}
@@ -1167,6 +1171,7 @@ function CreativesTable({rows,sort,onSort,images,onImageUpload}){
                     </div>
                   </td>
                   {visibleCols.find(c=>c.key==="objetivo")&&<td style={{padding:"8px 10px",fontSize:10}}><span style={{background:T.metaL,color:T.meta,padding:"1px 7px",borderRadius:20,fontWeight:700}}>{row.objetivo||"—"}</span></td>}
+                  {visibleCols.find(c=>c.key==="produto")&&<td style={{padding:"8px 10px",fontSize:10,color:T.muted,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={row.produto}>{row.produto||"—"}</td>}
                   {visibleCols.find(c=>c.key==="reach")&&<td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmt(row.reach)}</td>}
                   {visibleCols.find(c=>c.key==="impressions")&&<td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:T.muted}}>{fmt(row.impressions)}</td>}
                   {visibleCols.find(c=>c.key==="freq")&&<td style={{padding:"8px 10px",fontSize:11,textAlign:"right",color:hasFatigue?T.bad:row.freq>2?T.warn:row.freq>0?T.good:T.faint,fontWeight:row.freq>0?700:400}}>{row.freq>0?row.freq.toFixed(2)+"×":"—"}</td>}
@@ -1286,7 +1291,8 @@ function MetaTab({meta,shopify,rate,onFile,onClear,creativeImages,onImageUpload}
     if(!meta)return[];
     return Object.entries(meta.byCreative).map(([name,d])=>{
       const cpcDirect=d._cpcCount>0?d._cpcSum/d._cpcCount:0;const clicks=d.clicks>0?d.clicks:(cpcDirect>0?Math.round(d.spend/cpcDirect):0);const cpc=cpcDirect>0?cpcDirect:(clicks>0?d.spend/clicks:0);const cpm=d.impressions>0?(d.spend/d.impressions)*1000:0;const ctr=d.impressions>0&&clicks>0?(clicks/d.impressions)*100:0;const freq=d._freqImprTotal>0?d._freqImprSum/d._freqImprTotal:0;
-      return{name,objetivo:detectObjective(d.campaign||""),reach:d.reach||0,impressions:d.impressions,freq,clicks,ctr,cpm,cpc,lpv:d.lpv,addCart:d.addCart,checkout:d.checkout,purchases:d.purchases,spend:d.spend,cpa:d.purchases>0?d.spend/d.purchases:0,cvr:d.lpv>0?(d.purchases/d.lpv)*100:0};
+      const p=name.split("|");const produto=p.length>1?p[0].trim().slice(0,40):"";
+      return{name,produto,objetivo:detectObjective(d.campaign||""),reach:d.reach||0,impressions:d.impressions,freq,clicks,ctr,cpm,cpc,lpv:d.lpv,addCart:d.addCart,checkout:d.checkout,purchases:d.purchases,spend:d.spend,cpa:d.purchases>0?d.spend/d.purchases:0,cvr:d.lpv>0?(d.purchases/d.lpv)*100:0};
     });
   },[meta]);
   const countryRows=useMemo(()=>{
@@ -1460,15 +1466,13 @@ Admin → Pedidos → <b>Exportar</b><br/>Todos os pedidos do período<br/>Forma
 <ExportBtn data={sP} filename="produtos_sku.csv" cols={[{key:"sku",label:"SKU"},{key:"name",label:"Nome"},{key:"orders",label:"Pedidos"},{key:"qty",label:"Itens"},{key:"revenue",label:"Rec. USD"}]}/>
 </div>
 <DataTable sort={sortP} onSort={onSP} accentColor={T.shopify} cols={[
-{key:"sku",label:"SKU / Produto",align:"left",render:(v,row)=>(
-<div style={{display:"flex",alignItems:"center",gap:10}}>
+{key:"sku",label:"SKU",align:"left",render:(v,row)=>(
+<div style={{display:"flex",alignItems:"center",gap:8}}>
 <CreativeImageCell adName={"sku_"+(v!=="—"?v:row.key)} images={productImages||{}} onUpload={(name,file)=>onProductImageUpload&&onProductImageUpload(name,file)}/>
-<div>
-<div style={{fontFamily:"monospace",fontSize:10,color:T.meta,fontWeight:700}}>{v!=="—"?v:"—"}</div>
-<div style={{fontSize:11,color:T.text,marginTop:2,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={row.name}>{row.name}</div>
-</div>
+<span style={{fontFamily:"monospace",fontSize:10,color:T.meta,fontWeight:700}}>{v!=="—"?v:"—"}</span>
 </div>
 )},
+{key:"name",label:"Produto",align:"left",render:v=><span style={{fontSize:11,color:T.text,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}} title={v}>{v||"—"}</span>},
 {key:"orders",label:"Pedidos",render:v=>fmt(v),color:v=>v>0?T.shopify:T.faint},
 {key:"qty",label:"Itens",render:v=>fmt(v||0),color:v=>v>0?T.shopify:T.faint},
 {key:"revenue",label:"Rec. USD",render:v=>v>0?fmtUSD(v):"—",color:v=>v>0?T.good:T.faint},
@@ -1764,27 +1768,34 @@ CLEAR DATA MODAL
 function ClearDataModal({onClose,onClear}){
 const T=useT();
 const[selected,setSelected]=useState({meta:false,shopify:false,pinterest:false});
-const[monthFilter,setMonthFilter]=useState("");
-const handleClear=()=>{if(!Object.values(selected).some(Boolean))return;onClear({...selected,monthFilter});onClose();};
+const[ft,setFt]=useState("all");const[monthFilter,setMonthFilter]=useState("");const[dayFilter,setDayFilter]=useState("");
+const canGo=Object.values(selected).some(Boolean)&&(ft==="all"||(ft==="month"&&monthFilter)||(ft==="day"&&dayFilter));
+const handleClear=()=>{if(!canGo)return;onClear({...selected,monthFilter:ft==="month"?monthFilter:"",dayFilter:ft==="day"?dayFilter:""});onClose();};
 return(
 <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-<div style={{background:T.card,borderRadius:T.radius,padding:24,minWidth:360,boxShadow:"0 16px 48px rgba(0,0,0,0.2)",animation:"fadeIn 0.2s"}} onClick={e=>e.stopPropagation()}>
-<div style={{fontSize:16,fontWeight:800,color:T.text,fontFamily:T.fontDisplay,marginBottom:16}}>🗑 Apagar Dados</div>
-<div style={{fontSize:12,color:T.muted,marginBottom:16}}>Selecione quais dados apagar. Esta ação não pode ser desfeita.</div>
-{[["meta","Meta Ads CSV",T.meta],["shopify","Shopify CSV",T.shopify],["pinterest","Pinterest CSV",T.pinterest]].map(([key,label,color])=>(
-<label key={key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",cursor:"pointer",borderBottom:1px solid ${T.border},fontSize:12,color:T.text}}>
-<input type="checkbox" checked={selected[key]} onChange={()=>setSelected(s=>({...s,[key]:!s[key]}))} style={{accentColor:color,width:16,height:16}}/>
+<div style={{background:T.card,borderRadius:T.radius,padding:24,minWidth:380,boxShadow:"0 16px 48px rgba(0,0,0,0.2)",animation:"fadeIn 0.2s"}} onClick={e=>e.stopPropagation()}>
+<div style={{fontSize:15,fontWeight:800,color:T.text,fontFamily:T.fontDisplay,marginBottom:4}}>🗑 Apagar / Sobrescrever Dados</div>
+<div style={{fontSize:11,color:T.muted,marginBottom:14}}>Apagar por mês ou dia mantém o restante dos dados.</div>
+{[["meta","🟦 Meta Ads",T.meta],["shopify","🟩 Shopify",T.shopify],["pinterest","🟥 Pinterest",T.pinterest]].map(([key,label,color])=>(
+<label key={key} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",cursor:"pointer",borderBottom:`1px solid ${T.border}`,fontSize:12,color:T.text}}>
+<input type="checkbox" checked={selected[key]} onChange={()=>setSelected(s=>({...s,[key]:!s[key]}))} style={{accentColor:color,width:15,height:15}}/>
 <span style={{color,fontWeight:700}}>{label}</span>
 </label>
 ))}
-<div style={{marginTop:12,marginBottom:16}}>
-<div style={{fontSize:9,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:T.fontDisplay,marginBottom:6}}>Filtrar por mês (opcional)</div>
-<input type="month" value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} style={{width:"100%",border:1px solid ${T.border},borderRadius:T.radius,padding:"7px 10px",fontSize:11,background:T.bg,color:T.text}}/>
-<div style={{fontSize:9,color:T.faint,marginTop:4}}>Se vazio, apaga todos os dados da fonte selecionada.</div>
+<div style={{marginTop:12,marginBottom:14}}>
+<div style={{fontSize:9,color:T.muted,fontFamily:T.fontDisplay,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>Escopo</div>
+<div style={{display:"flex",gap:5,marginBottom:10}}>
+{[["all","📦 Tudo"],["month","📅 Por Mês"],["day","🗓 Por Dia"]].map(([v,l])=>(
+<button key={v} onClick={()=>setFt(v)} style={{fontSize:10,padding:"4px 11px",borderRadius:20,cursor:"pointer",border:`1px solid ${ft===v?T.bad:T.border}`,background:ft===v?`${T.bad}18`:"transparent",color:ft===v?T.bad:T.muted,fontFamily:T.fontDisplay,fontWeight:700}}>{l}</button>
+))}
 </div>
-<div style={{display:"flex",gap:8"}}>
-<button onClick={handleClear} disabled={!Object.values(selected).some(Boolean)} style={{flex:1,background:Object.values(selected).some(Boolean)?T.bad:"#9ca3af",color:"#fff",border:"none",borderRadius:T.radius,padding:"10px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:T.fontDisplay}}>Apagar Selecionados</button>
-<button onClick={onClose} style={{fontSize:12,color:T.muted,background:"none",border:1px solid ${T.border},borderRadius:T.radius,padding:"10px 16px",cursor:"pointer"}}>Cancelar</button>
+{ft==="month"&&<input type="month" value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} style={{width:"100%",border:`1px solid ${T.border}`,borderRadius:T.radius,padding:"7px 10px",fontSize:11,background:T.bg,color:T.text}}/>}
+{ft==="day"&&<input type="date" value={dayFilter} onChange={e=>setDayFilter(e.target.value)} style={{width:"100%",border:`1px solid ${T.border}`,borderRadius:T.radius,padding:"7px 10px",fontSize:11,background:T.bg,color:T.text}}/>}
+{ft==="all"&&<div style={{fontSize:9,color:T.faint}}>Remove todos os dados das fontes selecionadas do banco.</div>}
+</div>
+<div style={{display:"flex",gap:8}}>
+<button onClick={handleClear} disabled={!canGo} style={{flex:1,background:canGo?T.bad:"#9ca3af",color:"#fff",border:"none",borderRadius:T.radius,padding:"10px",fontSize:12,fontWeight:700,cursor:canGo?"pointer":"default",fontFamily:T.fontDisplay}}>Confirmar</button>
+<button onClick={onClose} style={{fontSize:12,color:T.muted,background:"none",border:`1px solid ${T.border}`,borderRadius:T.radius,padding:"10px 16px",cursor:"pointer"}}>Cancelar</button>
 </div>
 </div>
 </div>
@@ -1843,13 +1854,37 @@ sbSave("pinterest",merged);
 },[pinterestCsv]);
 const handleImageUpload=useCallback(async(adName,file)=>{
 const result=await sbUploadCreative(adName,file);
-if(result){setCreativeImages(prev=>({...prev,[result.key]:result.url,[adName.trim().slice(0,80)]:result.url}));}
+if(result){const nk=normImgKey(adName);setCreativeImages(prev=>({...prev,[result.key]:result.url,[nk]:result.url,[adName.trim().slice(0,80)]:result.url}));}
 },[]);
-const handleClearData=useCallback(({meta,shopify,pinterest,monthFilter})=>{
-if(meta){setMetaCsv("");sbDelete("meta");}
-if(shopify){setShopifyCsv("");sbDelete("shopify");}
-if(pinterest){setPinterestCsv("");sbDelete("pinterest");}
-},[]);
+const handleClearData=useCallback(({meta,shopify,pinterest,monthFilter,dayFilter})=>{
+  const filterCsv=(csv,dateFields,getDate)=>{
+    if(!csv||((!monthFilter||monthFilter==="")&&(!dayFilter||dayFilter==="")))return "";
+    try{
+      const{data,meta:m}=Papa.parse(csv,{header:true,skipEmptyLines:true});
+      const filtered=data.filter(r=>{
+        const d=getDate(r);
+        if(monthFilter&&d&&d.slice(0,7)===monthFilter)return false;
+        if(dayFilter&&d&&d.slice(0,10)===dayFilter)return false;
+        return true;
+      });
+      if(filtered.length===data.length)return "";
+      return Papa.unparse(filtered,{columns:m.fields});
+    }catch{return "";}
+  };
+  if(meta){
+    if(monthFilter||dayFilter){
+      const f=filterCsv(metaCsv,null,r=>getStr(r,COL.date).slice(0,10));
+      if(f!==null){setMetaCsv(f);f?sbSave("meta",f):sbDelete("meta");}
+    }else{setMetaCsv("");sbDelete("meta");}
+  }
+  if(shopify){
+    if(monthFilter||dayFilter){
+      const f=filterCsv(shopifyCsv,null,r=>(r["Created at"]||"").slice(0,10));
+      if(f!==null){setShopifyCsv(f);f?sbSave("shopify",f):sbDelete("shopify");}
+    }else{setShopifyCsv("");sbDelete("shopify");}
+  }
+  if(pinterest){setPinterestCsv("");sbDelete("pinterest");}
+},[metaCsv,shopifyCsv]);
 const meta=useMemo(()=>metaCsv?parseMeta(metaCsv,dateFrom,dateTo):null,[metaCsv,dateFrom,dateTo]);
 const shopify=useMemo(()=>shopifyCsv?parseShopify(shopifyCsv,dateFrom,dateTo):null,[shopifyCsv,dateFrom,dateTo]);
 const pinterest=useMemo(()=>pinterestCsv?parsePinterest(pinterestCsv):null,[pinterestCsv]);
